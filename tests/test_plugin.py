@@ -99,6 +99,9 @@ rc, o = hook(RESUME, {"hook_event_name": "SessionStart", "source": "compact", "c
 check("after /compact the hand-off names the CONTINUITY and how to read it", t2 in o and id2 in o and "read" in o, o)
 rc, o = hook(RESUME, {"hook_event_name": "SessionStart", "source": "compact", "cwd": tmp})
 check("another folder gets no hand-off", o == "", o)
+ev_r = {"hook_event_name": "SessionStart", "source": "compact", "cwd": proj, "session_id": "dup-r"}
+o1, o2 = hook(RESUME, ev_r)[1], hook(RESUME, ev_r)[1]
+check("installed twice: the hand-off is said once, not twice", (t2 in o1) and o2 == "", [o1[:80], o2[:80]])
 rc, o = rf("quiet")
 check("quiet on", rc == 0 and "quiet ON" in o and os.path.exists(os.path.join(RH, "quiet.json")), o)
 rc, o = rf("quiet", "--status")
@@ -144,6 +147,12 @@ open(os.path.join(RH, "quiet.json"), "w").write("{}")
 o = watch(t_hi, "w3")
 check("quiet: silent", o == "", o)
 os.remove(os.path.join(RH, "quiet.json"))
+ev_d = json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "dup-w", "transcript_path": t_hi})
+procs = [subprocess.Popen([sys.executable, WATCH], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=WENV,
+                          text=True, encoding="utf-8") for _ in range(2)]
+outs = [p.communicate(ev_d)[0] for p in procs]
+check("installed twice, both hooks at once: the person is asked exactly once",
+      sum(1 for x in outs if "about 50% full" in x) == 1, [x[:60] for x in outs])
 o = watch(transcript([a("claude-fable-5-1", 120000)]), "w4")
 check("fable's measured window (280k): 120k fires", "43% full" in o or "42% full" in o, o)
 o = watch(transcript([a("claude-sonnet-5", 90000)]), "w5")

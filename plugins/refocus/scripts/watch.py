@@ -111,14 +111,17 @@ def main():
             except Exception:
                 pass
         return
-    if os.path.exists(stamp):
-        return
+    # Claim the stamp atomically. If the plugin is installed twice (the org's marketplace AND GitHub), two copies
+    # of this hook run at once; only the one that creates the stamp speaks, so the person is asked once.
     try:
         os.makedirs(os.path.dirname(stamp), exist_ok=True)
-        with io.open(stamp, "w") as f:
-            f.write(str(used))
+        fd = os.open(stamp, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+    except FileExistsError:
+        return
     except Exception:
-        pass
+        return
+    with os.fdopen(fd, "w") as f:
+        f.write(str(used))
     pct = int(100.0 * used / win)
     head = ("REFOCUS WATCH: this conversation is about %d%% full (%dk of about %dk on %s). When it fills, it is "
             "replaced by a summary of itself.\n" % (pct, used // 1000, win // 1000, model or "this model"))

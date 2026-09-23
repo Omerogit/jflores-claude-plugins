@@ -29,6 +29,15 @@ def main():
     e = h.get(os.path.normcase(os.path.abspath(cwd)))
     if not e or time.time() - e.get("at", 0) > MAX_AGE_S:
         return
+    # Two installs (org marketplace and GitHub) mean two copies of this hook: the first to claim the marker speaks.
+    mark = os.path.join(os.path.dirname(HANDOFF), "resumed", "%s-%d" % (ev.get("session_id") or "s", int(e["at"])))
+    try:
+        os.makedirs(os.path.dirname(mark), exist_ok=True)
+        os.close(os.open(mark, os.O_WRONLY | os.O_CREAT | os.O_EXCL))
+    except FileExistsError:
+        return
+    except Exception:
+        pass
     age = (time.time() - e["at"]) / 3600.0
     sys.stdout.write(
         "THE CONTEXT ABOVE IS A SUMMARY. The work was saved just before this compaction, %.1fh ago:\n"
