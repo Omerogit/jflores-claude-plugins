@@ -3,6 +3,7 @@
   "owner": {
     "name": "J Flores Company"
   },
+  "description": "J Flores Company's Claude Code plugins.",
   "plugins": [
     {
       "name": "refocus",
