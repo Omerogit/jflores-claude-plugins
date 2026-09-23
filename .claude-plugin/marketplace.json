@@ -1,0 +1,13 @@
+{
+  "name": "jflores",
+  "owner": {
+    "name": "J Flores Company"
+  },
+  "plugins": [
+    {
+      "name": "refocus",
+      "source": "./plugins/refocus",
+      "description": "The refocus cut: ask once when the conversation fills, save a verified CONTINUITY to your desk in the Brain, then you type /compact. Never clears."
+    }
+  ]
+}

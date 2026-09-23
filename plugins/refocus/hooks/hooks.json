@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" watch.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" resume.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
