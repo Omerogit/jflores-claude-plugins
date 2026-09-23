@@ -1,0 +1,4 @@
+# Every file LF, on every machine: a CRLF py.sh cannot run under sh (Windows git defaults to CRLF on checkout).
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
