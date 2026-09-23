@@ -86,9 +86,11 @@ def last_usage(tp):
 def main():
     if os.environ.get("OFFICE_SEAT"):
         return                              # an office seat has its own watch
-    if os.path.exists(os.path.join(HOME, ".claude", "hooks", "context_watch.py")) and \
-            not os.environ.get("REFOCUS_IGNORE_HOUSE_WATCH"):
-        return                              # Omero's own machine has the house watch; never fire twice
+    if not os.environ.get("REFOCUS_IGNORE_HOUSE_WATCH") and (
+            os.path.exists(os.path.join(HOME, ".claude", "hooks", "context_watch.py"))   # Omero's bench
+            or os.path.exists(os.path.join(HOME, ".claude", "brain.json"))              # a house bench
+            or os.path.isdir("/home/monday/office")):                                   # monday-server
+        return                              # a house machine has the house watch; never fire twice
     try:
         ev = json.loads(sys.stdin.read() or "{}")
     except Exception:

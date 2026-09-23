@@ -15,7 +15,8 @@ sends (`connect`). Every write is byte-verified by the door and hashed again her
     refocus.py sweep [--line L] [--apply]           keep one CONTINUITY per line; move older to _HISTORY
     refocus.py quiet [--off|--status]              "stop asking" (per machine)
 
-Exit codes: 3 no brain connected - 4 VERIFY FAIL - 5 the door refused - 6 the door did not answer.
+Exit codes: 3 no brain connected - 4 VERIFY FAIL - 5 the door refused - 6 the door did not answer -
+7 a J Flores house machine (office seat, Omero's bench): use the house refocus-cut skill instead.
 """
 import argparse
 import datetime
@@ -51,6 +52,30 @@ def stop_no_brain():
     out("| say 'connect my brain'. You can still type /compact yourself at any time.  |")
     out("+----------------------------------------------------------------------------+")
     sys.exit(3)
+
+
+def house_machine():
+    """Why this is a J Flores HOUSE machine, or None. The org installs this plugin for every account signed in to
+    it - including the office seats and Omero's bench, which have their own refocus-cut that files into their own
+    brains. Here this plugin must step aside, or a seat would tell its person "no brain connected" and not cut."""
+    if os.environ.get("REFOCUS_IGNORE_HOUSE_WATCH"):
+        return None                                        # tests only
+    if os.environ.get("OFFICE_SEAT"):
+        return "an office seat (%s)" % os.environ["OFFICE_SEAT"]
+    if os.path.exists(os.path.join(HOME, ".claude", "hooks", "context_watch.py")):
+        return "Omero's bench (the house context watch is installed)"
+    if os.path.exists(os.path.join(HOME, ".claude", "brain.json")):
+        return "a machine with a house brain.json"
+    if os.path.isdir("/home/monday/office"):
+        return "monday-server"
+    return None
+
+
+def step_aside(why):
+    out("HOUSE MACHINE - %s." % why)
+    out("This plugin files nothing here. Use the house skill `refocus-cut` (not `refocus:refocus-cut`): it files")
+    out("into this seat's or this bench's own brain, the way the house does.")
+    sys.exit(7)
 
 
 def conf():
@@ -322,6 +347,9 @@ def main():
     q.add_argument("--off", action="store_true")
     q.add_argument("--status", action="store_true")
     a = ap.parse_args()
+    why = house_machine()
+    if why:
+        step_aside(why)
     {"connect": cmd_connect, "whoami": cmd_whoami, "method": cmd_method, "previous": cmd_previous,
      "file": cmd_file, "cut": cmd_cut, "read": cmd_read, "sweep": cmd_sweep, "quiet": cmd_quiet}[a.cmd](a)
 

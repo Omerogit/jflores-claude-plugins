@@ -16,6 +16,12 @@ MAX_AGE_S = 12 * 3600
 
 
 def main():
+    if not os.environ.get("REFOCUS_IGNORE_HOUSE_WATCH") and (
+            os.environ.get("OFFICE_SEAT")
+            or os.path.exists(os.path.join(HOME, ".claude", "hooks", "context_watch.py"))
+            or os.path.exists(os.path.join(HOME, ".claude", "brain.json"))
+            or os.path.isdir("/home/monday/office")):
+        return                              # a house machine hands off through its own hook
     try:
         ev = json.loads(sys.stdin.read() or "{}")
     except Exception:

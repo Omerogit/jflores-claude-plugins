@@ -1,6 +1,8 @@
 ---
 name: refocus-cut
 description: >
+  For a person's OWN machine. On a J Flores house machine (an office seat, or Omero's bench) the house skill
+  `refocus-cut` governs - use that one there, never this; this one steps aside with exit 7 if run there.
   The refocus cut: save a sharpened CONTINUITY of this work to the person's desk in the J Flores Brain (the last
   one on this line, edited and refocused, not a fresh summary), verified, then the person types /compact. Nothing
   happens without a yes. When the refocus watch says the conversation is filling, ASK once, in your own words, and

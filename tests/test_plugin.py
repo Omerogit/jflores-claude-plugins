@@ -24,8 +24,10 @@ os.makedirs(proj)
 LINE = os.path.basename(proj).upper()
 today = datetime.date.today().isoformat()
 fails = []
-ENV = dict(os.environ, REFOCUS_HOME=RH, PYTHONIOENCODING="utf-8")
+ENV = dict(os.environ, REFOCUS_HOME=RH, PYTHONIOENCODING="utf-8", REFOCUS_IGNORE_HOUSE_WATCH="1")
 ENV.pop("OFFICE_SEAT", None)
+HENV = dict(ENV)                     # the house check left ON: what an office seat or Omero's bench really sees
+HENV.pop("REFOCUS_IGNORE_HOUSE_WATCH")
 
 
 def check(name, cond, detail=""):
@@ -168,8 +170,23 @@ o = watch(t_hi, "w9", env=empty)
 check("no brain connected: it says so and does not offer the refocus", "NO BRAIN CONNECTED" in o and
       "Do not file or cut" in o and "about 50% full" in o, o)
 if os.path.exists(os.path.join(os.path.expanduser("~"), ".claude", "hooks", "context_watch.py")):
-    o = watch(t_hi, "w10", env=ENV)
+    o = watch(t_hi, "w10", env=HENV)
     check("on Omero's machine (house watch present): silent, never twice", o == "", o)
+    rc, o = rf("whoami", env=HENV)
+    check("on Omero's bench the skill steps aside to the house refocus-cut (exit 7)",
+          rc == 7 and "HOUSE MACHINE" in o and "`refocus-cut`" in o, o)
+
+# ---------------------------------------------------------------- house machines: the plugin steps aside
+SEAT = dict(HENV, OFFICE_SEAT="zen", OFFICE_ROOM="r1")
+rc, o = rf("whoami", env=SEAT)
+check("on an office seat the skill steps aside to the house refocus-cut (exit 7), files nothing",
+      rc == 7 and "office seat (zen)" in o, o)
+rc, o = rf("file", "--title", "CONTINUITY-%s-%s-07" % (LINE, today), "--content-file", f1, env=SEAT)
+check("on an office seat even `file` refuses before touching the door", rc == 7, o)
+rc, o = hook(RESUME, {"hook_event_name": "SessionStart", "source": "compact", "cwd": proj, "session_id": "seat"}, SEAT)
+check("on an office seat the plugin's hand-off stays silent (the house hook speaks)", o == "", o)
+o = watch(t_hi, "w11", env=SEAT)
+check("on an office seat the plugin's watch stays silent", o == "", o)
 
 # ---------------------------------------------------------------- py.sh
 sh = shutil.which("sh")

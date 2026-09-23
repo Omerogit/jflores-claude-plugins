@@ -1,6 +1,6 @@
 {
   "name": "refocus",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "The refocus cut: when a conversation fills, Claude asks once; on a yes it saves a sharpened CONTINUITY to your desk in the J Flores Brain (verified), then you type /compact. Never clears. 'stop asking' turns it off.",
   "author": {
     "name": "J Flores Company"
