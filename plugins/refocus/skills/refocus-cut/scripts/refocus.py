@@ -90,7 +90,7 @@ def conf():
 
 
 def http(method, url, key=None, body=None, timeout=120):
-    h = {"Accept": "application/json", "User-Agent": "refocus-plugin/1.0"}
+    h = {"Accept": "application/json", "User-Agent": "refocus-plugin/1.1"}
     if key:
         h["Authorization"] = "Bearer " + key
     data = None
@@ -233,7 +233,10 @@ def cmd_file(a):
         sys.exit("refocus: --line %s does not match the title's line %s" % (a.line.upper(), line))
     if any(name == title for _, _, _, name in chain(line)):
         sys.exit("refocus: %s already exists - run `previous` again for the next title" % title)
-    r = door("POST", "/v1/note", {"folder": "04_MEMORY", "title": title, "text": body, "kind": "continuity"})
+    # A CONTINUITY is a WORK-side note (DESIGN-THE-PARTNER-2026-09-23-01 section 2: a desk's refocus notes are
+    # work-side notes). Named, because once a person's private side exists the door refuses a note with no side.
+    r = door("POST", "/v1/note", {"folder": "04_MEMORY", "title": title, "text": body, "kind": "continuity",
+                                  "side": "work"})
     back = door("GET", "/v1/read?id=" + r["file_id"])
     mine = sha(back["text"])
     ok = r.get("verified") and not r.get("title_changed") and mine == r["readback_sha256"]

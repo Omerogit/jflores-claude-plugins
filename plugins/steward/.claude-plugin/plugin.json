@@ -1,0 +1,8 @@
+{
+  "name": "steward",
+  "version": "1.0.0",
+  "description": "Meet your Faithful Steward: a teammate who works with you, and only you, formed in the J Flores Brain from your own interview. Type /steward:start when you are ready. What you share about yourself stays on a private side.",
+  "author": {
+    "name": "J Flores Company"
+  }
+}

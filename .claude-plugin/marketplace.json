@@ -9,6 +9,11 @@
       "name": "refocus",
       "source": "./plugins/refocus",
       "description": "The refocus cut: ask once when the conversation fills, save a verified CONTINUITY to your desk in the Brain, then you type /compact. Never clears."
+    },
+    {
+      "name": "steward",
+      "source": "./plugins/steward",
+      "description": "Meet your Faithful Steward: a teammate who works with you, and only you, formed in the J Flores Brain from your own interview. Type /steward:start when you are ready. What you share about yourself stays on a private side."
     }
   ]
 }
