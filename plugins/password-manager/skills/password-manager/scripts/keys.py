@@ -2,7 +2,7 @@
 """keys.py - put a password, API key or token into the J Flores secret store from a person's OWN machine, without
 the value ever passing through this machine, a terminal, or a chat.
 
-It asks the Brain door (with this machine's Brain key, the one `refocus.py connect` saved) for a one-time keydrop
+It asks the Brain door (with this machine's Brain key, the one the refocus plugin saved when the person connected their brain) for a one-time keydrop
 link. The person opens the link, pastes each value into its own box, and presses one button; the value goes from
 their browser straight into the store, where it is read back and checked. Keys are saved under the person's own
 name (marc-hcp-api), so nobody's key can overwrite one the house already uses. Standard library only.
@@ -64,7 +64,7 @@ def conf():
 
 def door(method, path, body=None):
     c = conf()
-    h = {"Accept": "application/json", "User-Agent": "refocus-plugin/1.2", "Authorization": "Bearer " + c["key"]}
+    h = {"Accept": "application/json", "User-Agent": "password-manager-plugin/1.0", "Authorization": "Bearer " + c["key"]}
     data = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")

@@ -52,5 +52,5 @@ ask Omero for their Brain link.
 
 ## Exit codes
 
-3 no brain connected (or the key was turned off) - 5 the door refused, and says why in words - 6 the door did not
+3 no brain connected - install the refocus plugin and use your Brain link first (or the key was turned off) - 5 the door refused, and says why in words - 6 the door did not
 answer - 7 a house machine: use the house `password-manager` skill.

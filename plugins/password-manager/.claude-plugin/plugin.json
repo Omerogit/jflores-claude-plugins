@@ -1,0 +1,8 @@
+{
+  "name": "password-manager",
+  "version": "1.0.0",
+  "description": "Save a password, API key or login into the J Flores secret store through a one-time link - never through a terminal or a chat. Keys are saved under your own name. Needs your Brain connected (the refocus plugin's link).",
+  "author": {
+    "name": "J Flores Company"
+  }
+}

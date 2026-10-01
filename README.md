@@ -21,7 +21,7 @@ Since 1.1.0 every note names its side (`work`), because once your steward's priv
 note that does not say which side it is on.
 
 
-### password-manager (in refocus, 1.2.0)
+## password-manager
 
 Save a password, API key or login into the J Flores secret store without typing it into a terminal or a chat.
 Ask Claude to "save a key" (or paste nothing and say what it is for): it makes a one-time link, you open it and paste
