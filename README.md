@@ -20,6 +20,14 @@ Flores server, which lets your key write only to your own desk.
 Since 1.1.0 every note names its side (`work`), because once your steward's private side exists, the door refuses a
 note that does not say which side it is on.
 
+
+### password-manager (in refocus, 1.2.0)
+
+Save a password, API key or login into the J Flores secret store without typing it into a terminal or a chat.
+Ask Claude to "save a key" (or paste nothing and say what it is for): it makes a one-time link, you open it and paste
+each value into its own box. Keys are saved under your own name (`marc-...`), so nobody can overwrite a key the
+house already uses. To have an agent or tool use a key, tell Omero or Monday.
+
 ## steward
 
 Meet your **Faithful Steward**: a teammate who works with you, and only you. Your steward learns how you work,
