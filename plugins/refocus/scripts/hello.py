@@ -41,7 +41,11 @@ def main():
         "To check or use it: the refocus-cut skill's `refocus.py whoami` (and `read <id>` for the person's own files).\n"
         "Brain ids cited inside house skills (like win-them-over) will not open from here. That is expected: work\n"
         "from the skill text. Anything that needs more (a server, a bot, a credential, a Brain folder) goes to Omero\n"
-        "through the share skill (`share.py ask`), never around it.\n" % (who, c["door"]))
+        "through the share skill (`share.py ask`), never around it.\n"
+        "HOUSECALL PRO IS CONNECTED TOO, through the same door: customers, jobs and job numbers, line items and part\n"
+        "numbers, the schedule, estimates, invoices, memberships, the audit line. Read it with the housecall-pro\n"
+        "skill (`hcp.py`), read only. Never say this computer is not connected to Housecall Pro, and never ask for an\n"
+        "HCP login or key: the server reads it with the house's own session.\n" % (who, c["door"]))
     welcome(who)
 
 
@@ -59,6 +63,8 @@ your own words - not a list read out, not this text. Keep it short, then offer t
     answer comes back right here in Claude Code. No more screenshots over Telegram.
   - Permission on Omero's phone: anything that needs his OK (a server, a saved login, a credential, a new tool)
     reaches him as Approve / Decline, and the answer comes back here (`share.py ask`).
+  - Housecall Pro, from right here: they can ask about any customer, job number, schedule, estimate, invoice or
+    membership, and you read it for them (the housecall-pro skill). Read only, and no HCP login on this computer.
   - Passwords saved safely: a one-time link puts a key straight into the company's secret store, never into a chat
     (the password-manager plugin).
   - Their own agents: they can design an agent here with you and send it. Monday takes it into the house's

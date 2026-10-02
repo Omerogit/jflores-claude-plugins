@@ -38,9 +38,12 @@ try:
     check("connected: names the desk and the door, says not Google Drive", rc == 0 and "IS connected, as omar-desk"
           in out and "https://example.test/brain" in out and "not reached\nthrough Google Drive" in out, out)
     check("the key is never printed", "bd_secret" not in out, out)
+    check("the note says Housecall Pro is connected through the door, read with the housecall-pro skill",
+          "HOUSECALL PRO IS CONNECTED TOO" in out and "housecall-pro" in out and "Never say this computer is not "
+          "connected to Housecall Pro" in out, out)
     check("the first session is handed the welcome, with every part Omero asked for",
           "J FLORES WELCOME" in out and all(w in out for w in ("Memory that lasts", "send this to Omero",
-          "Approve / Decline", "password-manager", "Their own agents", "/steward:start", "does not give")), out)
+          "Approve / Decline", "password-manager", "Housecall Pro, from right here", "Their own agents", "/steward:start", "does not give")), out)
     rc, out = run(env)
     check("the welcome comes once: the next session gets only the connection note",
           "IS connected" in out and "J FLORES WELCOME" not in out, out)
