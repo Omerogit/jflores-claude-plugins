@@ -42,6 +42,47 @@ def main():
         "Brain ids cited inside house skills (like win-them-over) will not open from here. That is expected: work\n"
         "from the skill text. Anything that needs more (a server, a bot, a credential, a Brain folder) goes to Omero\n"
         "through the share skill (`share.py ask`), never around it.\n" % (who, c["door"]))
+    welcome(who)
+
+
+# THE WELCOME (Omero, 2026-10-02: "when anybody installs this, it should somehow ... post it directly under Claude as
+# to the benefits and everything that comes along with it (and their ability to send an agent...). This is a great
+# process for getting newbies on the server." DECISION-PERSON-AGENT-ROUTE-2026-10-02-01). Once per desk per computer,
+# in the first new session after it connects. The facts are fixed; the words are Claude's own (fixed lines "eventually
+# sound robotic"). The stamp is claimed atomically, so a plugin installed twice still welcomes once.
+WELCOME = """J FLORES WELCOME - this is the person's first session since this computer was connected to the Brain.
+After you answer whatever they open with (or right away, if they only say hello), welcome them ONCE, warmly and in
+your own words - not a list read out, not this text. Keep it short, then offer to show them any part. It carries:
+  - Memory that lasts: when a conversation gets long, you save your notes to their desk in the J Flores Brain,
+    checked word for word, before it is compacted. Their work stops starting from zero.
+  - A direct line to Monday and Omero: they say "send this to Omero" when they are stuck (the share skill), and the
+    answer comes back right here in Claude Code. No more screenshots over Telegram.
+  - Permission on Omero's phone: anything that needs his OK (a server, a saved login, a credential, a new tool)
+    reaches him as Approve / Decline, and the answer comes back here (`share.py ask`).
+  - Passwords saved safely: a one-time link puts a key straight into the company's secret store, never into a chat
+    (the password-manager plugin).
+  - Their own agents: they can design an agent here with you and send it. Monday takes it into the house's
+    standup: Titus forms it, the house builders build it on the server, it is reviewed and shipped - the same route
+    as Omero's and Marc's agents. It becomes a teammate with its own brain that learns from the house's agents, and
+    they from it. Anything that crosses money or customers reaches Omero as Approve / Decline. They stay the owner
+    of what it is for, and read and correct the draft before it goes live.
+  - Their Faithful Steward, when they are ready: a teammate for them alone, formed from their own interview
+    (`/steward:start`, after Omero talks with them first).
+  - What it does not give, on purpose: not the whole Brain, no server login, no Brain password on this computer.
+    One key, for their own desk, that Omero can turn off.
+"""
+
+
+def welcome(who):
+    stamp = os.path.join(D, "welcomed", "%s.stamp" % "".join(ch for ch in who if ch.isalnum() or ch in "-_"))
+    try:
+        os.makedirs(os.path.dirname(stamp), exist_ok=True)
+        fd = os.open(stamp, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+    except Exception:
+        return                                         # welcomed already (or cannot remember it: say nothing)
+    with os.fdopen(fd, "w") as f:
+        f.write("welcomed\n")
+    sys.stdout.write(WELCOME)
 
 
 try:
