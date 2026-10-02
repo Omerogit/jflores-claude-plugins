@@ -7,6 +7,7 @@ help-<person>; Monday is called there and Omero reads it; the answer comes back 
 on the person's next message.
 
     share.py send --title T --file F      send it (F holds the text; --text "..." for a short one)
+    share.py ask --need N --why W [--file F]   needs Omero's permission or access: Approve / Decline on his phone
     share.py replies [--all]              answers that came back since the last ones shown
     share.py thread [--n 20]              the last messages, both sides
 
@@ -122,6 +123,25 @@ def cmd_send(a):
     out("`share.py replies` when they ask whether anyone answered.")
 
 
+def cmd_ask(a):
+    """Omero 2026-10-02: anything that needs his permission or access goes to him as Approve / Decline on
+    Telegram; his tap comes back here like any answer."""
+    text = a.text or ""
+    if a.file:
+        with open(a.file, encoding="utf-8") as f:
+            text = f.read()
+    st = state()
+    st.setdefault("seen", time.time() - 1)
+    r = door("POST", "/v1/request", {"need": a.need, "why": a.why, "text": text})
+    st["last_share"] = time.time()
+    st["room"] = r.get("room")
+    save(st)
+    out("ASKED Omero - it is on his phone as Approve / Decline (ref %s, room %s, %s)." %
+        (r["id"], r["room"], "VERIFY PASS" if r.get("verified") else "VERIFY FAIL"))
+    out("His answer comes back here on its own, on the person's next message after he taps. If he approves, Monday")
+    out("carries it out and says so in the same place.")
+
+
 def cmd_replies(a):
     st = state()
     since = 0 if a.all else st.get("seen", 0)
@@ -154,12 +174,18 @@ def main():
     g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--file")
     g.add_argument("--text")
+    k = sub.add_parser("ask")
+    k.add_argument("--need", required=True)
+    k.add_argument("--why", required=True)
+    g2 = k.add_mutually_exclusive_group()
+    g2.add_argument("--file")
+    g2.add_argument("--text")
     r = sub.add_parser("replies")
     r.add_argument("--all", action="store_true")
     t = sub.add_parser("thread")
     t.add_argument("--n", type=int, default=20)
     a = ap.parse_args()
-    {"send": cmd_send, "replies": cmd_replies, "thread": cmd_thread}[a.cmd](a)
+    {"send": cmd_send, "ask": cmd_ask, "replies": cmd_replies, "thread": cmd_thread}[a.cmd](a)
 
 
 if __name__ == "__main__":

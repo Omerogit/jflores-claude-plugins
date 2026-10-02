@@ -97,6 +97,10 @@ try:
     rc, out = share("send", "--title", "PATH", "--file", fn)
     check("send: SENT, VERIFY PASS, says Monday was called", rc == 0 and "VERIFY PASS" in out and "Monday was called"
           in out and ROOM["posts"][-1] == {"title": "PATH", "text": "claude is not recognized\n"}, out)
+    rc, out = share("ask", "--need", "read the cookie jar", "--why", "a Maytag check", "--text", "one job a day")
+    check("ask: it goes to Omero's phone as Approve / Decline, with what and why", rc == 0 and "ASKED Omero" in out and
+          ROOM["posts"][-1] == {"need": "read the cookie jar", "why": "a Maytag check", "text": "one job a day"}, out)
+    ROOM["msgs"].pop()                 # the stub keeps it as "mine"; it would never be a reply anyway
     rc, out = share("replies")
     check("an answer from before the first share is not new", rc == 0 and "No answer yet" in out, out)
     rc, out = watch()

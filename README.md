@@ -23,7 +23,8 @@ connects, and checks for Python. It is safe to run again.
 
 **Share (1.4.0).** When your Claude Code runs into something with the J Flores setup or work, say "send this to Omero"
 (or "share this"). It goes to your help room in the J Flores Office, where Monday is called and Omero reads it, and
-the answer comes back into your Claude Code on your next message. Passwords, keys, links and customers' contact
+the answer comes back into your Claude Code on your next message. Anything that needs Omero's permission or access (the
+company's saved logins, the server, a key) goes to his phone as **Approve / Decline**, and his answer comes back the same way. Passwords, keys, links and customers' contact
 details are never sent.
 
 Since 1.1.0 every note names its side (`work`), because once your steward's private side exists, the door refuses a

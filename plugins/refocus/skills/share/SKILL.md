@@ -3,7 +3,9 @@ name: share
 description: >
   Send what this Claude Code ran into to the J Flores house (Monday and Omero), and bring their answer back here.
   Use it when the person says "send this to Omero", "send it to Monday", "share this", "ask the house", "ask
-  Omero"; when they ask "did Omero (or Monday) answer?"; and when you are stuck on this computer's J Flores setup
+  Omero"; when they ask "did Omero (or Monday) answer?"; when something needs Omero's permission or access (the
+  cookie jar, the server, a credential, a Brain folder, a new tool - it becomes Approve / Decline on his phone);
+  and when you are stuck on this computer's J Flores setup
   or work (a plugin, the Brain, a J Flores tool or rail, a command that is blocked, a tool that is missing) and the
   person says yes to sending it. Not for a J Flores house machine (an office seat or Omero's bench).
 ---
@@ -46,6 +48,22 @@ Show the person what you are about to send in a few lines (they may want to add 
 
 Write the text to a file first (a temp file is fine) so nothing is lost to quoting. It prints **SENT ... VERIFY
 PASS** when the house has it word for word. Tell the person it is sent, and that the answer will show up here.
+
+## When it needs Omero's permission or access
+
+Some things this computer can never do on its own, by design: read the company's saved logins (the cookie jar),
+reach the server, get a credential or a key, see Brain folders beyond this desk, spend money, or start a new tool
+on the server. Do not look for a way around that, and do not ask the person to write it up for Omero. Say plainly
+what is needed and why, and on the person's yes:
+
+    share.py ask --need "<one line: what is needed>" --why "<one or two lines: what it is for>" --file <more detail>
+
+It reaches Omero's phone as a message with **Approve** and **Decline** buttons. When he taps, the answer comes back
+here. If he approves, Monday carries it out (or hands it to whoever builds it) and says here what was done. The
+same "never put in" rule as a share holds: no passwords, keys, links, or customers' contact details or dollars.
+
+If you are not sure whether something needs his OK, send it as a share instead. Monday will raise the ask herself
+when it does.
 
 ## When the answer comes back
 
