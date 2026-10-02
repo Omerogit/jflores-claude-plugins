@@ -9,6 +9,9 @@
 # The size is measured, not guessed: every assistant record in the transcript carries its own usage, and
 # input + cache_read + cache_creation is the context that turn paid for. It fires once at 40% of the model's
 # window and re-arms when the window drops back under the line (after a compaction).
+#
+# It also carries the share rail's answers (1.4.0, 2026-10-02): when something was shared from this computer, it
+# looks for the house's answer at most once a minute and hands it to the session to show the person (share_answers).
 import io
 import json
 import os
@@ -83,6 +86,63 @@ def last_usage(tp):
     return None, None
 
 
+SHARE = os.path.join(D, "share.json")
+SHARE_OPEN_DAYS = 14                   # look for answers this long after the last share
+SHARE_EVERY = int(os.environ.get("REFOCUS_SHARE_EVERY") or 60)      # seconds between looks (tests: 0)
+
+
+def share_answers():
+    """The share rail (2026-10-02): if something was shared lately, look - at most once a minute, four seconds at
+    most - for answers from the house, and hand them to the session to show the person. Silent on any failure:
+    the person's message must never wait on the door."""
+    import time
+    import urllib.request
+    try:
+        with open(SHARE, encoding="utf-8") as f:
+            st = json.load(f)
+        with open(CONF, encoding="utf-8-sig") as f:
+            c = json.load(f)
+    except Exception:
+        return ""
+    now = time.time()
+    if now - st.get("last_share", 0) > SHARE_OPEN_DAYS * 86400 or now - st.get("checked", 0) < SHARE_EVERY:
+        return ""
+    # Two copies of this hook can run at once (the plugin installed twice): only the one that claims the look speaks.
+    lock = SHARE + ".look"
+    try:
+        if os.path.exists(lock) and now - os.path.getmtime(lock) < max(SHARE_EVERY, 2):
+            return ""
+        fd = os.open(lock + ".%d" % os.getpid(), os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+        os.close(fd)
+        os.replace(lock + ".%d" % os.getpid(), lock)
+    except Exception:
+        return ""
+    st["checked"] = now
+    try:
+        req = urllib.request.Request(c["door"] + "/v1/share/replies?since=%r" % float(st.get("seen", 0)), headers={
+            "Accept": "application/json", "User-Agent": "refocus-plugin/watch-1.4", "Authorization": "Bearer " + c["key"]})
+        with urllib.request.urlopen(req, timeout=4) as r:
+            msgs = json.loads(r.read().decode("utf-8") or "{}").get("messages") or []
+    except Exception:
+        msgs = []
+    if msgs:
+        st["seen"] = max(st.get("seen", 0), max(m["ts"] for m in msgs))
+    try:
+        with open(SHARE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(st, f)
+        os.replace(SHARE + ".tmp", SHARE)
+    except Exception:
+        return ""
+    if not msgs:
+        return ""
+    parts = ["SHARE RAIL: an answer came back from the J Flores house to what this computer shared (the share skill).\n"
+             "It is written to the person. Show it to them first, in full and in plain words, before anything else;\n"
+             "then help them do what it says.\n"]
+    for m in msgs:
+        parts.append("--- from %s ---\n%s\n--- end ---\n" % (m.get("from") or "the house", (m.get("body") or "").rstrip()))
+    return "".join(parts)
+
+
 def main():
     if os.environ.get("OFFICE_SEAT"):
         return                              # an office seat has its own watch
@@ -95,6 +155,9 @@ def main():
         ev = json.loads(sys.stdin.read() or "{}")
     except Exception:
         return
+    answer = share_answers()
+    if answer:
+        sys.stdout.write(answer)
     if os.path.exists(QUIET):
         return
     tp = ev.get("transcript_path") or ""

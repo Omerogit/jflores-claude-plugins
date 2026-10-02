@@ -17,6 +17,15 @@ Your machine never holds a Brain password. It holds one key for your desk only, 
 stored in `~/.claude/refocus/door.json` (file mode 0600). Each note is written through the Brain door on the J
 Flores server, which lets your key write only to your own desk.
 
+**On Windows, the surest setup is one line in PowerShell.** Open the page your link opens and copy its line
+(`irm https://.../brain/setup/... | iex`). It finds Claude Code (the desktop app keeps it off PATH), installs the plugins,
+connects, and checks for Python. It is safe to run again.
+
+**Share (1.4.0).** When your Claude Code runs into something with the J Flores setup or work, say "send this to Omero"
+(or "share this"). It goes to your help room in the J Flores Office, where Monday is called and Omero reads it, and
+the answer comes back into your Claude Code on your next message. Passwords, keys, links and customers' contact
+details are never sent.
+
 Since 1.1.0 every note names its side (`work`), because once your steward's private side exists, the door refuses a
 note that does not say which side it is on.
 

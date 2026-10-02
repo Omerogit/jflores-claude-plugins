@@ -40,6 +40,10 @@ The person gets a one-time link from Omero. When they paste it:
 It stores this machine's key (only this machine, file mode 0600) and says which desk it reached. The link works
 once. If it says "already used" and they did not use it, tell them to tell Omero straight away.
 
+If a step of the setup is blocked (a safety check refusing a plugin install, `claude` not found), do not look for
+a way around it. On Windows the person can paste one line into PowerShell themselves, and it does the whole setup:
+`irm <the link with /claim/ changed to /setup/> | iex` (the same line is on the page their link opens).
+
 ## Step 0 - the nudge: check, then ask
 
 When the watch fires, finish answering what you were asked. Then run `refocus.py whoami`.
