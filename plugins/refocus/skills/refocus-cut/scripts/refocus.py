@@ -277,6 +277,24 @@ def cmd_cut(a):
     with open(HANDOFF + ".tmp", "w", encoding="utf-8") as f:
         json.dump(h, f, indent=1)
     os.replace(HANDOFF + ".tmp", HANDOFF)
+    # 1.7.0 (2026-10-05): ARM the cut for this plugin's autocut module (hooks/autocut.ts). When this turn ends it
+    # compacts THIS session once - the same compact /compact makes, never a clear. It leaves loaded-<session>.json
+    # when it loads, so the automatic cut is promised only where it is actually running.
+    sid = (os.environ.get("CLAUDE_CODE_SESSION_ID") or "").strip()
+    if sid:
+        auto = os.path.join(D, "autocut")
+        os.makedirs(auto, exist_ok=True)
+        with open(os.path.join(auto, sid + ".json.tmp"), "w", encoding="utf-8", newline="\n") as f:
+            json.dump({"session_id": sid, "epoch": int(time.time()), "name": a.name, "id": a.continuity_id,
+                       "line": line}, f)
+        os.replace(os.path.join(auto, sid + ".json.tmp"), os.path.join(auto, sid + ".json"))
+        if os.path.exists(os.path.join(auto, "loaded-%s.json" % sid)):
+            out("REFOCUS cut ARMED  %s (%s) on the %s line" % (a.name, a.continuity_id, line))
+            out("This conversation compacts by itself ONCE, when this reply ends (the same compact /compact makes;")
+            out("it stays on screen). Tell the person, in one line, then end the reply - no more tool calls:")
+            out('  "Filed and verified. Compacting when this reply ends - if it hasn\'t in a minute, type /compact."')
+            out("After the cut, this folder's hand-off points the new context at the CONTINUITY.")
+            return
     out("REFOCUS cut  %s (%s) on the %s line" % (a.name, a.continuity_id, line))
     out("NOT CUT - no tool can compact from inside a turn. Tell the person, in one line:")
     out('  "Filed and verified. Type /compact now - your conversation stays on screen."')

@@ -104,15 +104,20 @@ CONTINUITYs on the line move to the desk's `_HISTORY` (never deleted; the same f
 
     refocus.py cut --continuity-id <FILEID> --name <TITLE> [--line LINE]
 
-No tool can compact from inside a turn, so the person does it. Say in one line: *"Filed and verified. Type
-`/compact` now - your conversation stays on screen."* It is **not cut** until they do. After their /compact, the
+- **It prints `ARMED`:** this plugin's autocut compacts the conversation ONCE when this reply ends - the same
+  compact `/compact` makes, it stays on screen. Say in one line: *"Filed and verified. Compacting when this reply
+  ends - if it hasn't in a minute, type `/compact`."* Then end the reply: no more tool calls.
+- **Otherwise** the person does it. Say in one line: *"Filed and verified. Type `/compact` now - your conversation
+  stays on screen."* It is **not cut** until they do.
+
+Never clear the conversation, by any tool, ever. After their /compact, the
 plugin tells the new context to read that CONTINUITY first; read it before answering anything else.
 
 ## Step 6 - report
 
 The CONTINUITY's name and file id, VERIFY PASS/FAIL with the hashes, how many older ones moved to `_HISTORY`,
 `chars` against the previous one (growth three passes running means it has become a log again), what left this
-pass, and: **not cut - type /compact**.
+pass, and: **armed - compacting when this reply ends**, or **not cut - type /compact**.
 
 ## What this is not
 

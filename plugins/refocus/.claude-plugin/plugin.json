@@ -1,7 +1,7 @@
 {
   "name": "refocus",
-  "version": "1.6.0",
-  "description": "The refocus cut: when a conversation fills, Claude asks once; on a yes it saves a sharpened CONTINUITY to your desk in the J Flores Brain (verified), then you type /compact. Never clears. 'stop asking' turns it off. And the share rail: send what you ran into to Monday and Omero, and their answer comes back here; anything that needs Omero's permission reaches his phone as Approve / Decline. And Housecall Pro, read only: ask about any customer, job number, schedule, estimate, invoice or membership, read through the Brain door with the house's own session (no HCP login on this computer).",
+  "version": "1.7.0",
+  "description": "The refocus cut: when a conversation fills, Claude asks once; on a yes it saves a sharpened CONTINUITY to your desk in the J Flores Brain (verified), then it compacts by itself when the reply ends (or you type /compact). Never clears. 'stop asking' turns it off. And the share rail: send what you ran into to Monday and Omero, and their answer comes back here; anything that needs Omero's permission reaches his phone as Approve / Decline. And Housecall Pro, read only: ask about any customer, job number, schedule, estimate, invoice or membership, read through the Brain door with the house's own session (no HCP login on this computer).",
   "author": {
     "name": "J Flores Company"
   }
