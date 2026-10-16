@@ -24,7 +24,9 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "skills", "start", "scripts"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import steward as S  # noqa: E402
+import thread_client as TC  # noqa: E402
 
 FD = os.path.join(S.SD, "formation")
 SESS = os.path.join(S.SD, "sessions")
@@ -386,6 +388,11 @@ def main():
     name = ev.get("hook_event_name")
     if name == "UserPromptSubmit":
         mark_interview(ev)
+        out = TC.on_prompt(ev)         # the laptop half of the one thread (w-d722be54) - its own gate, unrelated
+        if out:                        # to the Brain-formation flow below: no local thread.json means a silent
+            sys.stdout.write(out + "\n")  # no-op, so this never affects anyone who hasn't connected it
+    elif name == "Stop":
+        TC.on_stop(ev, last_assistant_text(ev.get("transcript_path") or ""))
     if not S.conf():
         return
     if name == "UserPromptSubmit":

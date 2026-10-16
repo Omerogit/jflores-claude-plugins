@@ -6,6 +6,8 @@ Brain. This machine holds no Brain credential: it holds one key, for one person,
 Omero sends (the same key the refocus plugin uses; connecting either plugin connects both). Standard library only.
 
     steward.py connect <link>        use the one-time link Omero sent
+    steward.py thread-connect <link>  use the one-time claim link from your steward's own door (the laptop half of
+                                      the one thread with their Telegram side; w-d722be54)
     steward.py start                 /steward:start: check, then begin or pick up where you left off
     steward.py welcome               the welcome, exactly as approved
     steward.py status                where it stands (what is covered, what is still open)
@@ -39,6 +41,8 @@ SD = os.environ.get("STEWARD_HOME") or os.path.join(HOME, ".claude", "steward") 
 CONF = os.path.join(RD, "door.json")
 PAUSE = os.path.join(SD, "paused.json")
 CACHE = os.path.join(SD, "cache.json")
+THREAD_CONF = os.path.join(SD, "thread.json")     # the laptop's own half of the one thread (2026-10-15, w-d722be54);
+                                                   # separate from CONF on purpose - a different door, a different key
 HERE = os.path.dirname(os.path.abspath(__file__))
 WELCOME = os.path.join(os.path.dirname(HERE), "WELCOME.md")
 CLAIM_RX = re.compile(r"^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._-]+)*/claim/[A-Za-z0-9_-]{20,100}$")
@@ -248,6 +252,25 @@ def cmd_connect(a):
     out("  key     stored in %s (this machine only; the link is now used up; the refocus plugin uses it too)" % CONF)
 
 
+def cmd_thread_connect(a):
+    """The laptop's half of the one thread (2026-10-15, w-d722be54): a one-time claim link from the steward's own
+    door, same shape as connect()'s Brain link but a different door and a different key - stored at THREAD_CONF,
+    never CONF, so the two never mix. Once connected, the steward plugin's hook keeps this laptop's Claude Code
+    and the steward's Telegram side in the one room; until then it has never carried a line."""
+    link = a.link.strip().strip("<>\"'")
+    if not CLAIM_RX.match(link):
+        sys.exit("steward: that is not a claim link (it looks like https://.../claim/...)")
+    st, b = http("GET", link)
+    if st != 200 or not b.get("token"):
+        out("steward: the link did not hand over a token: %s" % b.get("error", "HTTP %d" % st))
+        sys.exit(5)
+    save_json(THREAD_CONF, {"base": b["base"], "token": b["token"], "person": b["person"],
+                            "steward": b["steward"], "person_name": b["person_name"],
+                            "connected": time.strftime("%Y-%m-%dT%H:%M:%S"), "by": UA})
+    out("CONNECTED  the laptop thread with %s (for %s)" % (b["steward"], b["person_name"]))
+    out("  token   stored in %s (this machine only; the link is now used up)" % THREAD_CONF)
+
+
 def cmd_whoami(a):
     w = door("GET", "/v1/whoami")
     out("STEWARD whoami  %s (%s, for %s)  person side: %s" % (w["partner"], w.get("kind"), w["person"],
@@ -441,6 +464,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("connect")
     c.add_argument("link")
+    tc = sub.add_parser("thread-connect")
+    tc.add_argument("link")
     for n in ("whoami", "start", "welcome", "status", "draft", "pause", "resume"):
         sub.add_parser(n)
     wl = sub.add_parser("wakeline")
@@ -480,7 +505,8 @@ def main():
         out("HOUSE MACHINE - %s. Faithful Stewards are for a person's own Claude Code; nothing runs here." % why)
         sys.exit(7)
     try:
-        {"connect": cmd_connect, "whoami": cmd_whoami, "start": cmd_start, "welcome": cmd_welcome,
+        {"connect": cmd_connect, "thread-connect": cmd_thread_connect, "whoami": cmd_whoami, "start": cmd_start,
+         "welcome": cmd_welcome,
          "status": cmd_status, "brief": cmd_brief, "finish": cmd_finish, "draft": cmd_draft, "ratify": cmd_ratify,
          "pause": cmd_pause, "resume": cmd_resume, "wakeline": cmd_wakeline, "note": cmd_note, "move": cmd_move, "list": cmd_list,
          "read": cmd_read}[a.cmd](a)
