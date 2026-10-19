@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" watch.py",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/hook_launch watch.py",
             "timeout": 30
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" hello.py",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/hook_launch hello.py",
             "timeout": 15
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/py.sh\" resume.py",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/hook_launch resume.py",
             "timeout": 30
           }
         ]

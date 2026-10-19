@@ -1,0 +1,22 @@
+#!/bin/sh
+# Hook launcher - runs this plugin's hook script (named by argv[1]) with a working Python 3.
+# hooks.json invokes it with NO "sh" in front and no extension, so the identical command line
+# also resolves, on Windows, to hook_launch.cmd sitting right next to this file (PowerShell and
+# cmd both try PATHEXT extensions - .cmd included - against a bare path that has none). One
+# command line, every hook, both OSes - replaces `sh "${CLAUDE_PLUGIN_ROOT}/scripts/py.sh" X`,
+# which failed on Windows because there is no `sh` there without Git Bash.
+# DECISION-STEWARD-LAPTOP-STANDUP-2026-10-19-01.
+here="$(cd "$(dirname "$0")" && pwd)"
+script="$here/$1"
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1; then
+    exec "$py" "$script"
+  fi
+done
+stamp="$HOME/.claude/hook-launch/no-python.$(date +%Y%m%d)"
+if [ ! -f "$stamp" ]; then
+  mkdir -p "$HOME/.claude/hook-launch" 2>/dev/null
+  : > "$stamp" 2>/dev/null
+  echo "This plugin found no working Python 3, so its hook cannot run. Install Python 3 (python.org), then restart Claude Code." 1>&2
+fi
+exit 0
