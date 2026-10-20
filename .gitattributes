@@ -1,4 +1,4 @@
-# Every file LF, on every machine: a CRLF py.sh cannot run under sh (Windows git defaults to CRLF on checkout).
+# Every file LF, on every machine: a CRLF line breaks the sh half of scripts/hook_launch.cmd (Windows git defaults to CRLF on checkout).
 * text=auto eol=lf
 *.sh text eol=lf
 *.py text eol=lf

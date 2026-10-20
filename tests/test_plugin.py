@@ -15,7 +15,7 @@ PLUG = os.path.join(ROOT, "plugins", "refocus")
 RF = os.path.join(PLUG, "skills", "refocus-cut", "scripts", "refocus.py")
 WATCH = os.path.join(PLUG, "scripts", "watch.py")
 RESUME = os.path.join(PLUG, "scripts", "resume.py")
-PYSH = os.path.join(PLUG, "scripts", "py.sh")
+HOOK_WATCH = '. "%s/scripts/watch.cmd"' % PLUG.replace("\\", "/")   # the hooks.json line (see test_hook_launch.py)
 link = sys.argv[1]
 tmp = tempfile.mkdtemp(prefix="refocus-")
 RH = os.path.join(tmp, "state")
@@ -188,12 +188,13 @@ check("on an office seat the plugin's hand-off stays silent (the house hook spea
 o = watch(t_hi, "w11", env=SEAT)
 check("on an office seat the plugin's watch stays silent", o == "", o)
 
-# ---------------------------------------------------------------- py.sh
+# ---------------------------------------------------------------- the hook launcher
 sh = shutil.which("sh")
 if sh:
-    r = subprocess.run([sh, PYSH, "watch.py"], input=json.dumps({"hook_event_name": "UserPromptSubmit",
-                       "session_id": "p1", "transcript_path": t_hi}), env=WENV, capture_output=True, text=True)
-    check("py.sh finds a working Python and runs the hook", "about 50% full" in r.stdout, r.stdout + r.stderr)
+    LENV = dict(WENV, CLAUDE_PLUGIN_ROOT=PLUG.replace("\\", "/"))
+    r = subprocess.run([sh, "-c", HOOK_WATCH], input=json.dumps({"hook_event_name": "UserPromptSubmit",
+                       "session_id": "p1", "transcript_path": t_hi}), env=LENV, capture_output=True, text=True)
+    check("the launcher finds a working Python and runs the hook", "about 50% full" in r.stdout, r.stdout + r.stderr)
     if os.name != "nt":
         nopy = os.path.join(tmp, "nopy")
         os.makedirs(nopy)
@@ -201,10 +202,10 @@ if sh:
             p = shutil.which(tool)
             if p:
                 os.symlink(p, os.path.join(nopy, tool))
-        e2 = dict(WENV, PATH=nopy, HOME=os.path.join(tmp, "home2"))
-        r = subprocess.run([os.path.join(nopy, "sh"), PYSH, "watch.py"], input="{}", env=e2, capture_output=True, text=True)
+        e2 = dict(LENV, PATH=nopy, HOME=os.path.join(tmp, "home2"))
+        r = subprocess.run([os.path.join(nopy, "sh"), "-c", HOOK_WATCH], input="{}", env=e2, capture_output=True, text=True)
         check("no Python: one plain notice", "no working Python 3" in r.stdout and r.returncode == 0, r.stdout + r.stderr)
-        r = subprocess.run([os.path.join(nopy, "sh"), PYSH, "watch.py"], input="{}", env=e2, capture_output=True, text=True)
+        r = subprocess.run([os.path.join(nopy, "sh"), "-c", HOOK_WATCH], input="{}", env=e2, capture_output=True, text=True)
         check("no Python: not repeated the same day", r.stdout == "", r.stdout)
 
 shutil.rmtree(tmp, ignore_errors=True)
