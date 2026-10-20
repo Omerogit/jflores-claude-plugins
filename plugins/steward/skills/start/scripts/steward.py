@@ -163,10 +163,19 @@ def forget_cache():
 
 
 def text_arg(a):
-    """--text, or the text on stdin (a trailing '-', or no --text at all) so quotes never fight the shell."""
+    """--text, or the text on stdin (a trailing '-', or no --text at all) so quotes never fight the shell.
+    PowerShell pipes text with a leading UTF-8 BOM (\\ufeff) - stripped here so it never rides along into a
+    brief or a note, or into whatever reads the name slot's text as the agent's name."""
     if getattr(a, "text", None) not in (None, "-"):
-        return a.text
-    return sys.stdin.buffer.read().decode("utf-8", "replace")
+        return a.text.lstrip("﻿")
+    return sys.stdin.buffer.read().decode("utf-8", "replace").lstrip("﻿")
+
+
+def name_only(text):
+    """The name slot's answer is often the whole sentence it came in ("Samuel. He named his steward himself,
+    why not") - found 2026-10-19 on Omar's machine, where a BOM-corrupted answer was kept whole and read back
+    as the agent's name. Keep only the name: the words before the first sentence break."""
+    return re.split(r"[.!?\n]", text, 1)[0].strip() or text.strip()
 
 
 # ----------------------------------------------------------------- the wake line (the person's own instruction)
@@ -350,6 +359,8 @@ def cmd_brief(a):
         sys.exit("steward: the slots are %s" % ", ".join(SLOTS))
     turns = [int(t) for t in re.split(r"[,\s]+", a.turns or "") if t.strip().isdigit()]
     text = text_arg(a).strip()
+    if a.slot == "name":
+        text = name_only(text)
     r = door("POST", "/v1/steward/brief", {"slot": a.slot, "text": text, "turns": turns,
                                            "state": "inferred" if a.inferred else "said"})
     an = r["anatomy"]
@@ -476,7 +487,6 @@ def main():
     b.add_argument("slot")
     b.add_argument("--turns", default="")
     b.add_argument("--text")
-    b.add_argument("stdin", nargs="?", help="'-': the text is on stdin")
     b.add_argument("--inferred", action="store_true")
     f = sub.add_parser("finish")
     f.add_argument("--force", action="store_true")
@@ -490,7 +500,6 @@ def main():
     n.add_argument("--folder")
     n.add_argument("--kind", default="note")
     n.add_argument("--text")
-    n.add_argument("stdin", nargs="?", help="'-': the text is on stdin")
     m = sub.add_parser("move")
     m.add_argument("id")
     m.add_argument("--to", required=True, choices=("person", "work"))
@@ -499,7 +508,15 @@ def main():
     ls.add_argument("--folder")
     rd = sub.add_parser("read")
     rd.add_argument("id")
-    a = ap.parse_args()
+    # brief/note's trailing "-" ("the text is on stdin", SKILL.md's own `steward.py brief <slot> --turns 7 -`)
+    # is stripped here, before argparse ever sees it: a required positional (slot) plus an optional that takes
+    # a value (--turns) ahead of a trailing nargs='?' positional is a known argparse ambiguity (reproduces on
+    # 3.12: "unrecognized arguments: -") - text_arg() already reads stdin whenever --text is absent, so the
+    # token carries no value of its own and is safe to drop rather than hand to argparse.
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("brief", "note") and argv[-1:] == ["-"]:
+        argv = argv[:-1]
+    a = ap.parse_args(argv)
     why = house_machine()
     if why and a.cmd != "welcome":
         out("HOUSE MACHINE - %s. Faithful Stewards are for a person's own Claude Code; nothing runs here." % why)
