@@ -239,7 +239,7 @@ exit /b
       try { $script:Conn = Get-Content $tj -Raw | ConvertFrom-Json; $connected = $true } catch {}
     } else { Bad 5 ('The connect link did not work: ' + (($out -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1))); return }
   }
-  if (-not $connected) { Bad 5 'This laptop is not connected to a steward yet. Ask your steward for a connect link, or ask Omero.'; return }
+  if (-not $connected) { Bad 5 'This laptop is not connected to your steward. Text your steward on Telegram: "send me a connect link". Open the link it sends on this laptop and double-click the file it downloads.'; return }
   $Who = ([string]$script:Conn.steward).Split('-')[-1]
   if ($Who) { $Who = $Who.Substring(0, 1).ToUpper() + $Who.Substring(1) } else { $Who = 'your steward' }
   Ok ('connected to ' + $Who)
