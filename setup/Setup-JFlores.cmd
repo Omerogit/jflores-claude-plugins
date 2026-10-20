@@ -53,7 +53,9 @@ exit /b
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path
   }
   function Winget($id) {
-    $wg = Get-Command winget -ErrorAction SilentlyContinue
+    # First match only: RefreshPath can list WindowsApps twice, and two matches made '& $wg.Source' a BadExpression
+    # (Omar's laptop, 2026-10-20), which hid why Git did not install.
+    $wg = Get-Command winget -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $wg) { return 'winget is not on this computer' }
     $out = (& $wg.Source install --id $id -e --scope user --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1 | ForEach-Object { "$_" } | Out-String)
     if ($LASTEXITCODE -ne 0 -and $out -notmatch 'already installed|No newer|No available upgrade') {
@@ -61,7 +63,9 @@ exit /b
     }
     RefreshPath
     if ($LASTEXITCODE -ne 0 -and $out -notmatch 'already installed|No newer|No available upgrade') {
-      return (($out -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -Last 1) -replace '\s+', ' ').Trim()
+      $last = [string](@([string]$out -split "`n" | Where-Object { $_ -match '\S' }) | Select-Object -Last 1)
+      if (-not $last) { $last = 'winget gave no reason (exit ' + $LASTEXITCODE + ')' }
+      return ($last -replace '\s+', ' ').Trim()
     }
     return $null
   }
@@ -74,6 +78,22 @@ exit /b
       }
     }
     return $null
+  }
+  function GitDirect {
+    # When winget can't: Git for Windows' own installer from its GitHub release, for this user only (no admin).
+    try {
+      $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/git-for-windows/git/releases/latest' -Headers @{ 'User-Agent' = 'jflores-setup' } -TimeoutSec 60
+      $asset = @($rel.assets | Where-Object { $_.name -match '^Git-[\d.]+(\.windows\.\d+)?-64-bit\.exe$' }) | Select-Object -First 1
+      if (-not $asset) { return 'no Git installer found on the release page' }
+      $exe = Join-Path $env:TEMP $asset.name
+      Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $exe -UseBasicParsing -TimeoutSec 600
+      $p = Start-Process -FilePath $exe -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES', '/CURRENTUSER' -Wait -PassThru
+      RefreshPath
+      $cmdDir = Join-Path $env:LOCALAPPDATA 'Programs\Git\cmd'
+      if (-not (Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path (Join-Path $cmdDir 'git.exe'))) { $env:Path = $cmdDir + ';' + $env:Path }
+      if (Get-Command git -ErrorAction SilentlyContinue) { return $null }
+      return ('the Git installer ended with code ' + $p.ExitCode)
+    } catch { return ('the Git download failed: ' + ([string]$_.Exception.Message -replace '\s+', ' ')) }
   }
   function GitBash {
     # Where Claude Code finds Git Bash: CLAUDE_CODE_GIT_BASH_PATH, else next to git.exe.
@@ -119,6 +139,11 @@ exit /b
   else {
     Note 'installing Git for this user (no admin needed)...'
     $why = Winget 'Git.Git'
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+      Note ('winget could not (' + $why + '); trying Git''s own installer...')
+      $why2 = GitDirect
+      if ($why2) { $why = $why + '; ' + $why2 }
+    }
     if (Get-Command git -ErrorAction SilentlyContinue) { Ok 'Git installed' }
     else { $script:Warn += ('Git could not be installed (' + $why + '), so updates will not arrive by themselves.'); Note ('Git could not be installed: ' + $why + '. Going on without it.') }
   }
