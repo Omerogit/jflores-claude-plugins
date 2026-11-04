@@ -19,6 +19,11 @@
       "name": "steward",
       "source": "./plugins/steward",
       "description": "Meet your Faithful Steward: a teammate who works with you, and only you, formed in the J Flores Brain from your own interview. Type /steward:start when you are ready. What you share about yourself stays on a private side."
+    },
+    {
+      "name": "stand-up-a-teammate",
+      "source": "./plugins/stand-up-a-teammate",
+      "description": "Stand up a teammate from your own Claude Code: your words go to Titus on the J Flores server, where the teammate is formed and lives. A teammate already built on this computer is brought home with standup.py home."
     }
   ]
 }
