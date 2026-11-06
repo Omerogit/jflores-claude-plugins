@@ -52,6 +52,45 @@ def main():
         "skill (`hcp.py`), read only. Never say this computer is not connected to Housecall Pro, and never ask for an\n"
         "HCP login or key: the server reads it with the house's own session.\n" % (who, c["door"]))
     welcome(who)
+    worklog_told(who)
+
+
+# THE WORK LOG (Omero, 2026-11-06: "we need to write the program that insures all work being done on computers in our
+# team get transferred to the server where we can read"). worklog.py sends each session's work to the server after
+# every reply. The person is told once per desk per computer, plainly, in Claude's own words; and anything an earlier
+# session left unsent (offline, window closed) goes now, detached.
+WORKLOG_TOLD = """J FLORES WORK LOG - tell the person this ONCE, plainly and briefly, in your own words, after you answer
+what they open with: from now on, the work they do in Claude Code on this computer (what they ask, what you answer,
+the files changed and the commands run) is saved to the company's server after each reply, so Omero and Monday can
+see the work and nothing is lost. Passwords, keys and card numbers are masked. Anything on the private side of a
+Faithful Steward is never sent. Say it once; do not repeat it in later sessions, and do not make it sound like a
+warning: it is how this team keeps its work in one place.
+"""
+
+
+def worklog_told(who):
+    try:
+        import subprocess
+        here = os.path.dirname(os.path.abspath(__file__))
+        kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+        argv = [sys.executable, os.path.join(here, "worklog.py"), "sweep"]
+        if os.name == "nt":
+            subprocess.Popen(argv, creationflags=0x00000008 | 0x00000200, **kw)
+        else:
+            subprocess.Popen(argv, start_new_session=True, **kw)
+    except Exception:
+        pass
+    if os.environ.get("REFOCUS_WORKLOG", "").lower() == "off":
+        return
+    stamp = os.path.join(D, "worklog", "told-%s.stamp" % "".join(ch for ch in who if ch.isalnum() or ch in "-_"))
+    try:
+        os.makedirs(os.path.dirname(stamp), exist_ok=True)
+        fd = os.open(stamp, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+    except Exception:
+        return
+    with os.fdopen(fd, "w") as f:
+        f.write("told\n")
+    sys.stdout.write(WORKLOG_TOLD)
 
 
 # THE WELCOME (Omero, 2026-10-02: "when anybody installs this, it should somehow ... post it directly under Claude as
