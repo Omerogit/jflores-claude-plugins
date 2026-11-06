@@ -157,6 +157,93 @@ try:
     W.flush("sess-0004", tp4)
     check("a person-side note anywhere in the unsent lines stops the whole send", S3.calls == 0)
 
+    # r2 (Nathan and Shallum's hold, 11-06): a record bigger than a batch is sent whole, in pieces, never cut short
+    tp6 = os.path.join(tmp, "s6.jsonl")
+    write(tp6, [rec("user", "run them all"),
+                rec("assistant", [{"type": "tool_use", "name": "Bash", "input": {"command": "echo %d" % k}}
+                                  for k in range(305)]),
+                rec("user", "after the big one")])
+    S6 = Server()
+    W.HTTP = S6
+    W.flush("sess-0006", tp6)
+    cmds = [e for e in S6.got.values() if e["kind"] == "tool"]
+    check("one record of 305 tool calls (batch limit 300) arrives whole: 305 calls, then the next line",
+          len(cmds) == 305 and len({(e["i"], e["j"]) for e in cmds}) == 305 and
+          S6.texts("ask")[-1] == "after the big one", (len(cmds), S6.calls))
+    calls = S6.calls
+    W.flush("sess-0006", tp6)
+    check("and nothing of it is sent twice", S6.calls == calls)
+    tp7 = os.path.join(tmp, "s7.jsonl")
+    write(tp7, [rec("assistant", [{"type": "text", "text": ("%02d" % k) + "x" * 19000} for k in range(25)]),
+                rec("user", "next")])
+    S7 = Server()
+    W.HTTP = S7
+    W.flush("sess-0007", tp7)
+    check("one record over 350 KB goes in pieces, every piece once", len([e for e in S7.got.values()
+          if e["kind"] == "answer"]) == 25 and S7.texts("ask") == ["next"] and S7.calls >= 2, S7.calls)
+    tp8 = os.path.join(tmp, "s8.jsonl")
+    write(tp8, [rec("user", "a"), rec("assistant", [{"type": "text", "text": "b%d" % k} for k in range(4)] +
+                                     [{"type": "tool_use", "name": "Bash", "input": {"command": "c%d" % k}}
+                                      for k in range(3)]), rec("user", "d")])
+    saved = W.BATCH_ENTRIES
+    W.BATCH_ENTRIES = 3
+    S8 = Server()
+    W.HTTP = S8
+    W.flush("sess-0008", tp8)
+    W.BATCH_ENTRIES = saved
+    check("Shallum's case: seven entries on one line, batch size 3, all nine arrive",
+          len(S8.got) == 9 and sorted(S8.texts("tool")) == ['{"command": "c0"}', '{"command": "c1"}',
+                                                             '{"command": "c2"}'], S8.texts())
+
+    # masking on this computer, before the cut
+    M = W.mask
+    cases = {
+        "an Anthropic key": ("export ANTHROPIC_API_KEY=sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123", "sk-ant-api03"),
+        "a short labelled password": ("password=hunter2", "hunter2"),
+        "a JSON password": ('{"password": "Tr0ub4dor"}', "Tr0ub4dor"),
+        "curl -u": ("curl -u admin:s3cretpass https://x", "s3cretpass"),
+        "sshpass -p": ("sshpass -p 'Pa55word!' ssh me@host", "Pa55word"),
+        "mysql -p": ("mysql -uroot -pS3cretPass db", "S3cretPass"),
+        "a cookie header": ("Cookie: session=abc123def456; hcp=zz99", "abc123def456"),
+        "a set-cookie": ("set-cookie: hcp_session=Q1w2E3r4; Path=/", "Q1w2E3r4"),
+        "a session id": ("session_id=9f8e7d6c5b", "9f8e7d6c5b"),
+        "a bearer token": ("Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456", "abcdefghijklmnop"),
+        "a card number": ("card 4111 1111 1111 1111 exp", "4111 1111 1111 1111"),
+        "a door key": ("key bd_" + "Q" * 30, "bd_QQQQ"),
+        "a URL with a password": ("postgres://app:hunter22@db/x", "hunter22"),
+    }
+    for name, (text, secret) in cases.items():
+        check("masked on this computer: " + name, secret not in M(text) and "[masked]" in M(text), M(text))
+    kept = ["Job 14215 is on the board", "2032 passed, 26/26 mutants", "call (956) 392-3423",
+            "session = requests.Session()", "token = os.environ['HCP_TOKEN']", "password: None",
+            "commit 1d28c7454ea8 over b0cbcd6955d5", "epoch 1793977445123"]
+    for t in kept:
+        check("kept whole: " + t, M(t) == t, M(t))
+    tp9 = os.path.join(tmp, "s9.jsonl")
+    key = "ghp_" + "A1b2C3d4E5" * 4
+    write(tp9, [rec("user", [{"type": "tool_result", "content": "x" * (2000 - 11) + " " + key}])])
+    S9 = Server()
+    W.HTTP = S9
+    W.flush("sess-0009", tp9)
+    res = S9.texts("result")[0]
+    check("a key that straddles the 2,000-character cut leaves no prefix behind (masked, then cut)",
+          "ghp_" not in res and "A1b2C3" not in res and len(res) <= 2000, res[-40:])
+
+    # off the record
+    tp10 = os.path.join(tmp, "s10.jsonl")
+    write(tp10, [rec("user", "fix the build"), rec("assistant", [{"type": "text", "text": "done"}])])
+    S10 = Server()
+    W.HTTP = S10
+    W.flush("sess-0010", tp10)
+    write(tp10, [rec("user", "Off the record, can I talk about my dad for a minute?"),
+                 rec("assistant", [{"type": "text", "text": "Of course."}])])
+    W.flush("sess-0010", tp10)
+    write(tp10, [rec("user", "back to the build")])
+    W.flush("sess-0010", tp10)
+    check("'off the record' stops the session: the work before it went, nothing after it does",
+          S10.texts("ask") == ["fix the build"] and "Of course." not in S10.texts() and W.load("sess-0010")["private"],
+          S10.texts())
+
     # kill switch and house machines
     tp5 = os.path.join(tmp, "s5.jsonl")
     write(tp5, [rec("user", "hello")])
@@ -193,7 +280,8 @@ try:
     check("the person is told once, the first session", "J FLORES WORK LOG" in r1.stdout and
           "J FLORES WORK LOG" not in r2.stdout, (r1.stdout[-300:], r2.stdout[-300:]))
     check("the telling names what goes, the masking and the steward's private side",
-          all(w in r1.stdout for w in ("files changed", "masked", "Faithful Steward", "ONCE")), r1.stdout[-600:])
+          all(w in r1.stdout for w in ("files changed", "blanked out", "Faithful Steward", "ONCE", "off the record",
+                                       "Only Omero and Monday")), r1.stdout[-900:])
     shutil.rmtree(os.path.join(RH, "worklog"), ignore_errors=True)
     r3 = subprocess.run([sys.executable, HELLO], input="{}", env=dict(env, REFOCUS_WORKLOG="off"),
                         capture_output=True, text=True, timeout=30)

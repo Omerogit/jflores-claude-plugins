@@ -61,10 +61,12 @@ def main():
 # session left unsent (offline, window closed) goes now, detached.
 WORKLOG_TOLD = """J FLORES WORK LOG - tell the person this ONCE, plainly and briefly, in your own words, after you answer
 what they open with: from now on, the work they do in Claude Code on this computer (what they ask, what you answer,
-the files changed and the commands run) is saved to the company's server after each reply, so Omero and Monday can
-see the work and nothing is lost. Passwords, keys and card numbers are masked. Anything on the private side of a
-Faithful Steward is never sent. Say it once; do not repeat it in later sessions, and do not make it sound like a
-warning: it is how this team keeps its work in one place.
+the files changed and the commands run) is saved to the company's server after each reply, so the work is never
+lost and Omero and Monday can see it. Only Omero and Monday can read it: it is locked on the server, not shared with
+the other teammates. Passwords, keys, cookies and card numbers are blanked out before anything leaves this computer.
+If they ever want to talk about something personal, they just say "off the record" and nothing more from that
+conversation is sent; the private side of a Faithful Steward is never sent either. Say it once; do not repeat it in
+later sessions, and do not make it sound like a warning: it is how this team keeps its work in one place.
 """
 
 
