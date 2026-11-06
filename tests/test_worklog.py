@@ -42,6 +42,10 @@ class Server:
         if self.down:
             raise OSError("offline")
         assert url.endswith("/v1/worklog") and key == "bd_k"
+        size = len(json.dumps(body, ensure_ascii=False).encode("utf-8"))
+        self.posts = getattr(self, "posts", []) + [(len(body["entries"]), size)]
+        if len(body["entries"]) > 400 or size > 512 * 1024:      # the door's own limits: it refuses, 400
+            return 400, {"error": "too big"}
         n = 0
         for e in body["entries"]:
             if (body["session"], e["i"], e["kind"], e["text"]) not in self.got:
@@ -211,6 +215,11 @@ try:
         "a card number": ("card 4111 1111 1111 1111 exp", "4111 1111 1111 1111"),
         "a door key": ("key bd_" + "Q" * 30, "bd_QQQQ"),
         "a URL with a password": ("postgres://app:hunter22@db/x", "hunter22"),
+        "an Authorization: Token header (HCP's API form)": (
+            "curl -H 'Authorization: Token abcdef0123456789abcdef' https://api.housecallpro.com/jobs",
+            "abcdef0123456789abcdef"),
+        "an Authorization: Basic header": ("Authorization: Basic dXNlcjpwYXNzd29yZDEyMw==", "dXNlcjpwYXNz"),
+        "a cookie header with unlabelled values": ("Cookie: _ga=GA1.2.33; hcpweb=Zq9Xw8kL", "Zq9Xw8kL"),
     }
     for name, (text, secret) in cases.items():
         check("masked on this computer: " + name, secret not in M(text) and "[masked]" in M(text), M(text))
@@ -229,6 +238,30 @@ try:
     check("a key that straddles the 2,000-character cut leaves no prefix behind (masked, then cut)",
           "ghp_" not in res and "A1b2C3" not in res and len(res) <= 2000, res[-40:])
 
+    pem = ("-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB\n"
+           "QyNTUxOQAAACDx1y2z3W4v5U6t7S8r9Q0p1O2n3M4l5K6j7I8h9G0f1E\n-----END OPENSSH PRIVATE KEY-----\nafter")
+    check("a private key's whole block is masked, not just its BEGIN line",
+          "b3BlbnNzaC1rZXkt" not in M(pem) and "QyNTUxOQ" not in M(pem) and "END OPENSSH" not in M(pem) and
+          M(pem).endswith("after"), M(pem))
+    check("a cut-off private key block (no END line) is masked to the end",
+          "b3BlbnNzaC1rZXkt" not in M(pem.split("-----END")[0]), M(pem.split("-----END")[0]))
+
+    # r3: every post fits the door's limits, and a batch never takes a record that won't fit
+    tp11 = os.path.join(tmp, "s11.jsonl")
+    write(tp11, [rec("assistant", [{"type": "tool_use", "name": "Bash", "input": {"command": "a%d" % k}}
+                                   for k in range(200)]),
+                 rec("assistant", [{"type": "tool_use", "name": "Bash", "input": {"command": "b%d" % k}}
+                                   for k in range(200)])])
+    S11 = Server()
+    W.HTTP = S11
+    W.flush("sess-0011", tp11)
+    check("two records of 200 at a batch limit of 300 go as 200 and 200, never 400 in one post",
+          [n for n, _ in S11.posts] == [200, 200] and len(S11.got) == 400, S11.posts)
+    check("no post in any of these runs broke the door's limits (400 entries, 512 KB)",
+          all(n <= 400 and b <= 512 * 1024 for s_ in (S6, S7, S11) for n, b in s_.posts), [s_.posts for s_ in (S6, S7)])
+    check("the record over 350 KB went in pieces that each fit 350 KB",
+          all(b <= W.BATCH_BYTES + 4096 for _, b in S7.posts), S7.posts)
+
     # off the record
     tp10 = os.path.join(tmp, "s10.jsonl")
     write(tp10, [rec("user", "fix the build"), rec("assistant", [{"type": "text", "text": "done"}])])
@@ -243,6 +276,16 @@ try:
     check("'off the record' stops the session: the work before it went, nothing after it does",
           S10.texts("ask") == ["fix the build"] and "Of course." not in S10.texts() and W.load("sess-0010")["private"],
           S10.texts())
+    for k, words in enumerate(["this is off-the-record", "OFF  THE  RECORD please", "off_the_record: my health",
+                               "can we talk off the record?"]):
+        tpk = os.path.join(tmp, "s12-%d.jsonl" % k)
+        write(tpk, [rec("user", words), rec("assistant", [{"type": "text", "text": "ok"}])])
+        Sk = Server()
+        W.HTTP = Sk
+        W.flush("sess-0012-%d" % k, tpk)
+        check("'off the record' in another spelling still stops it: %r" % words, Sk.calls == 0, Sk.texts())
+    check("'record' alone, or 'on the record', does not stop a session",
+          not W.OFF_RECORD_RX.search("log the record count") and not W.OFF_RECORD_RX.search("on the record"))
 
     # kill switch and house machines
     tp5 = os.path.join(tmp, "s5.jsonl")

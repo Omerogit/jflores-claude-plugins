@@ -47,7 +47,7 @@ CUT = {"ask": 20000, "answer": 20000, "tool": 8000, "result": 2000}
 HTTP_TIMEOUT = 30
 PRIVATE_RX = re.compile(r"steward\.py\s+(?:start|brief|draft|ratify|finish|pause)\b|--side[ =]person\b|"
                         r"\"side\"\s*:\s*\"person\"|/steward:start\b")
-OFF_RECORD_RX = re.compile(r"\boff the record\b", re.I)
+OFF_RECORD_RX = re.compile(r"\boff[\s_-]+(?:the[\s_-]+)?record\b", re.I)
 MASK = "[masked]"
 HTTP = None                    # fn(url, key, body) -> (status, dict); a test hands in its own
 
@@ -139,6 +139,17 @@ def _extra_value_is_secret(v):
     return bool(re.search(r"[\d\W_]", v)) or len(v) >= 16
 
 
+PRIVATE_KEY_BLOCK_RX = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)")
+AUTH_HEADER_RX = re.compile(r"(?i)(\bauthorization\s*[:=]\s*(?:(?:token|basic|bearer|digest|apikey|key)\s+)?)"
+                            r"([^\s'\",;]{6,})")
+
+
+def mask_first(t):
+    """Before the door's nets: a private key's whole block (the door's net masks only its BEGIN line, Nathan 11-06),
+    and any Authorization header's value, whatever its scheme (HCP's API uses `Token <key>`)."""
+    return AUTH_HEADER_RX.sub(lambda m: m.group(1) + MASK, PRIVATE_KEY_BLOCK_RX.sub(MASK, t))
+
+
 def mask_extra(t):
     out = EXTRA_RX[0].sub(lambda m: m.group(1) + MASK, t)
     for rx in EXTRA_RX[1:4]:
@@ -150,7 +161,7 @@ def mask_extra(t):
 
 def mask(text):
     """The door's nets, then the extra nets. Called on the whole text, before any cut, so no half key survives."""
-    t = SECRET_SHAPE_RX.sub(MASK, text or "")
+    t = SECRET_SHAPE_RX.sub(MASK, mask_first(text or ""))
 
     def lab(m):
         v = m.group("v")
