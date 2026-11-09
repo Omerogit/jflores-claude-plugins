@@ -33,9 +33,11 @@ def yields(home, plugin_root):
     return r.stdout.strip() or r.stderr.strip()
 
 
-def synced_copy(home):
-    d = os.path.join(home, ".claude", "plugins", "synced", "ff9c_de0d", "steward")
+def synced_copy(home, listed=True):
+    d = os.path.join(home, ".claude", "plugins", "synced", "ff9c_de0d", "steward~g2")
     shutil.copytree(ST, d)
+    with open(os.path.join(os.path.dirname(d), "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump({"plugins": [{"name": "steward"}] if listed else [{"name": "refocus"}]}, f)
     return d
 
 
@@ -46,6 +48,12 @@ def settings(home, enabled):
 
 tmp = tempfile.mkdtemp(prefix="steward-one-copy-")
 try:
+    s = os.path.join(tmp, "stale")
+    os.makedirs(os.path.join(s, ".claude"))
+    synced_copy(s, listed=False)
+    check("a leftover synced folder the org manifest no longer lists does not silence this copy",
+          yields(s, ST) == "RUN", yields(s, ST))
+
     h = os.path.join(tmp, "a")
     os.makedirs(os.path.join(h, ".claude"))
     check("marketplace copy runs when there is no org copy", yields(h, ST) == "RUN", yields(h, ST))

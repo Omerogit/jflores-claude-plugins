@@ -395,7 +395,15 @@ def yields_to_org_copy():
     if on.get("steward@synced") is False:
         return False
     import glob
-    return bool(glob.glob(os.path.join(home, "plugins", "synced", "*", "steward*", ".claude-plugin", "plugin.json")))
+    # The org manifest must list it: a folder left from an earlier sync generation is not an installed copy.
+    for man in glob.glob(os.path.join(home, "plugins", "synced", "*", "manifest.json")):
+        try:
+            listed = any(p.get("name") == "steward" for p in json.load(io.open(man, encoding="utf-8"))["plugins"])
+        except Exception:
+            listed = False
+        if listed and glob.glob(os.path.join(os.path.dirname(man), "steward*", ".claude-plugin", "plugin.json")):
+            return True
+    return False
 
 
 def main():

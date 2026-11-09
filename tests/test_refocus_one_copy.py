@@ -51,6 +51,14 @@ try:
 
     org = os.path.join(h, ".claude", "plugins", "synced", "ff9c_de0d", "refocus")
     shutil.copytree(RF, org)
+    man = os.path.join(os.path.dirname(org), "manifest.json")
+    with open(man, "w", encoding="utf-8") as f:
+        json.dump({"plugins": [{"name": "steward"}]}, f)
+    out = hello(h, RF)
+    check("a leftover synced folder the org manifest no longer lists does not silence this copy",
+          "IS connected" in out, out)
+    with open(man, "w", encoding="utf-8") as f:
+        json.dump({"plugins": [{"name": "refocus"}]}, f)
     out = hello(h, RF)
     check("MUST-FAIL on 1.7.1: marketplace copy is silent beside an installed org copy", out == "", out)
     out = hello(h, org)
