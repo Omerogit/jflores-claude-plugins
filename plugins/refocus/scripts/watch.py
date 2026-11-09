@@ -18,6 +18,9 @@ import os
 import random
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from one_copy import yields_to_org_copy  # noqa: E402
+
 HOME = os.path.expanduser("~")
 D = os.environ.get("REFOCUS_HOME") or os.path.join(HOME, ".claude", "refocus")   # REFOCUS_HOME: tests only
 QUIET = os.path.join(D, "quiet.json")
@@ -144,6 +147,8 @@ def share_answers():
 
 
 def main():
+    if yields_to_org_copy():
+        return                              # the org-synced copy runs instead
     if os.environ.get("OFFICE_SEAT"):
         return                              # an office seat has its own watch
     if not os.environ.get("REFOCUS_IGNORE_HOUSE_WATCH") and (

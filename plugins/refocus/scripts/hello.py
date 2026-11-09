@@ -9,6 +9,9 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from one_copy import yields_to_org_copy  # noqa: E402
+
 HOME = os.path.expanduser("~")
 D = os.environ.get("REFOCUS_HOME") or os.path.join(HOME, ".claude", "refocus")   # REFOCUS_HOME: tests only
 CONF = os.path.join(D, "door.json")
@@ -24,6 +27,8 @@ def house_machine():
 
 
 def main():
+    if yields_to_org_copy():
+        return                              # the org-synced copy runs instead
     if house_machine():
         return
     try:

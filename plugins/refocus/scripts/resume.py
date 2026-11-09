@@ -5,6 +5,9 @@
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from one_copy import yields_to_org_copy  # noqa: E402
 import time
 
 HOME = os.path.expanduser("~")
@@ -16,6 +19,8 @@ MAX_AGE_S = 12 * 3600
 
 
 def main():
+    if yields_to_org_copy():
+        return                              # the org-synced copy runs instead
     if not os.environ.get("REFOCUS_IGNORE_HOUSE_WATCH") and (
             os.environ.get("OFFICE_SEAT")
             or os.path.exists(os.path.join(HOME, ".claude", "hooks", "context_watch.py"))

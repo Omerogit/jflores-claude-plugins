@@ -57,7 +57,7 @@ try:
     check("an office seat: silent", rc == 0 and out == "", out)
     hk = json.load(open(HOOKS, encoding="utf-8"))["hooks"]["SessionStart"]
     check("wired for startup, resume and clear (the compact hand-off stays its own)",
-          any(h.get("matcher") == "startup|resume|clear" and "hello.py" in h["hooks"][0]["command"] for h in hk)
+          any(h.get("matcher") == "startup|resume|clear" and "hello.cmd" in h["hooks"][0]["command"] for h in hk)
           and any(h.get("matcher") == "compact" for h in hk), hk)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)

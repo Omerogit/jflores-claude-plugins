@@ -382,8 +382,8 @@ def yields_to_org_copy():
     """True when this copy is a marketplace install and the org-synced copy is installed and not switched off. Both
     copies share ~/.claude/steward, so two running would post every interview turn and thread line twice. The org
     copy (jflores-house-plugins, synced by the Claude Team org, 2026-11-09) is the one that runs."""
-    if os.environ.get("STEWARD_ONE_COPY_OFF"):
-        return False                                      # tests only
+    if os.environ.get("STEWARD_ONE_COPY_OFF") or os.environ.get("STEWARD_IGNORE_HOUSE"):
+        return False                                      # tests only: drive this checkout's copy
     root = ROOT.replace("\\", "/")
     if "/plugins/synced/" in root:
         return False
