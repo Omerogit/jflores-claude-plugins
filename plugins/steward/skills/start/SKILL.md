@@ -46,7 +46,7 @@ time and privacy that must be exact. Then wait for their answer to its last ques
 
 ## Step 3 - the conversation
 
-This is getting to know someone, not scoping a job. A steward has no single job: the steward's work is the person.
+This is getting to know someone, not scoping a job. A steward has no single job: the steward works beside the person, as partner and mentor on the mission, never as their assistant.
 
 - **Stories, not self-descriptions.** People describe themselves poorly in general terms and accurately when they
   tell what happened. One question at a time. Follow what they say ("what happened next?", "what made that hard?")
