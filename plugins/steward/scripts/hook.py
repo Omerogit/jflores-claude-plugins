@@ -378,12 +378,32 @@ def on_start(ev):
          ev.get("transcript_path") or "", w)
 
 
+def yields_to_org_copy():
+    """True when this copy is a marketplace install and the org-synced copy is installed and not switched off. Both
+    copies share ~/.claude/steward, so two running would post every interview turn and thread line twice. The org
+    copy (jflores-house-plugins, synced by the Claude Team org, 2026-11-09) is the one that runs."""
+    if os.environ.get("STEWARD_ONE_COPY_OFF"):
+        return False                                      # tests only
+    root = ROOT.replace("\\", "/")
+    if "/plugins/synced/" in root:
+        return False
+    home = os.path.join(os.path.expanduser("~"), ".claude")
+    try:
+        on = json.load(io.open(os.path.join(home, "settings.json"), encoding="utf-8")).get("enabledPlugins") or {}
+    except Exception:
+        on = {}
+    if on.get("steward@synced") is False:
+        return False
+    import glob
+    return bool(glob.glob(os.path.join(home, "plugins", "synced", "*", "steward*", ".claude-plugin", "plugin.json")))
+
+
 def main():
     try:
         ev = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
     except Exception:
         return
-    if S.house_machine():
+    if S.house_machine() or yields_to_org_copy():
         return
     name = ev.get("hook_event_name")
     if name == "UserPromptSubmit":
