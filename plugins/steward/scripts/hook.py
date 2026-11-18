@@ -325,6 +325,8 @@ def on_prompt(ev):
                              "person once that their last answer did not save, and ask them to paste it again.\n"
                              % type(e).__name__)
     if not os.path.exists(os.path.join(S.SD, "started.json")):
+        if not_met(w):
+            sys.stdout.write(tell_once(w) + (hint_line(w) if "steward" in prompt.lower() else ""))
         return                                            # no interview was ever begun on this machine
     try:
         s = status()
@@ -364,12 +366,49 @@ def on_stop(ev):
         pass
 
 
+# 4. NOT MET YET (2026-11-18). /steward:start is the person's own command (disable-model-invocation), so Claude Code
+#    keeps it out of the model's skill list. A connected person who asked their Claude about the Faithful Steward was
+#    told they did not have it (Haru, 11-18: 13 door calls, all whoami, never /v1/steward/begin). So every waking of a
+#    connected desk that has not begun tells the session the steward is here and how it begins, and the first prompt
+#    on this computer has the session say it to the person, once.
+HINT = os.path.join(S.SD, "start_hint.json")
+
+
+def not_met(w):
+    """True when this computer is connected as a person's desk and no interview was ever begun here."""
+    return w.get("kind", "desk") == "desk" and not os.path.exists(os.path.join(S.SD, "started.json"))
+
+
+def hint_line(w):
+    p = (w.get("person") or "this person").capitalize()
+    return ("[steward] The Faithful Steward plugin is installed on this computer, and %s has not met their steward "
+            "yet. Only %s can begin it, by typing /steward:start themselves: it is their own command, so it is not "
+            "in your skill list and you cannot run it. If they ask about their steward or the Faithful Steward, "
+            "never say they don't have it; tell them to type /steward:start.\n" % (p, p))
+
+
+def tell_once(w):
+    """The one-time line for the person, on the first prompt of this computer after the plugin learned it."""
+    if os.path.exists(HINT):
+        return ""
+    try:
+        S.save_json(HINT, {"told": time.time()})
+    except Exception:
+        return ""
+    p = (w.get("person") or "this person").capitalize()
+    return ("[steward] Tell %s once, briefly, at the end of your answer, in your own words: their Faithful Steward "
+            "is ready to meet, and typing /steward:start (exactly that, as its own message) begins it.\n" % p)
+
+
 def on_start(ev):
     src = ev.get("source") or "startup"
     try:
         S.forget_cache()
         w = whoami()
     except Exception:
+        return
+    if not_met(w):
+        sys.stdout.write(hint_line(w))
         return
     if w.get("kind") != "steward":
         return
