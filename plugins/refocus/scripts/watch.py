@@ -12,6 +12,9 @@
 #
 # It also carries the share rail's answers (1.4.0, 2026-10-02): when something was shared from this computer, it
 # looks for the house's answer at most once a minute and hands it to the session to show the person (share_answers).
+# 1.7.4 (2026-11-18): a connected computer is reachable whether or not it ever shared. Omero: "we share with Marc's
+# sessions all the time" - Marc shares daily, so his watch kept looking; Haru never shared, so a line in help-haru never
+# reached him. Now every connected computer looks once a minute; one that never shared starts a day back.
 import io
 import json
 import os
@@ -90,7 +93,7 @@ def last_usage(tp):
 
 
 SHARE = os.path.join(D, "share.json")
-SHARE_OPEN_DAYS = 14                   # look for answers this long after the last share
+FIRST_LOOK_S = 86400                   # a computer that never shared sees what the house said in the last day
 SHARE_EVERY = int(os.environ.get("REFOCUS_SHARE_EVERY") or 60)      # seconds between looks (tests: 0)
 
 
@@ -100,15 +103,18 @@ def share_answers():
     the person's message must never wait on the door."""
     import time
     import urllib.request
+    now = time.time()
     try:
-        with open(SHARE, encoding="utf-8") as f:
-            st = json.load(f)
         with open(CONF, encoding="utf-8-sig") as f:
             c = json.load(f)
     except Exception:
-        return ""
-    now = time.time()
-    if now - st.get("last_share", 0) > SHARE_OPEN_DAYS * 86400 or now - st.get("checked", 0) < SHARE_EVERY:
+        return ""                          # not connected: nothing to look at
+    try:
+        with open(SHARE, encoding="utf-8") as f:
+            st = json.load(f)
+    except Exception:
+        st = {"seen": now - FIRST_LOOK_S}  # never shared from here: the house can still reach this computer
+    if now - st.get("checked", 0) < SHARE_EVERY:
         return ""
     # Two copies of this hook can run at once (the plugin installed twice): only the one that claims the look speaks.
     lock = SHARE + ".look"

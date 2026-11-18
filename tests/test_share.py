@@ -86,11 +86,20 @@ try:
     os.makedirs(RH)
     with open(os.path.join(RH, "door.json"), "w", encoding="utf-8") as f:
         json.dump({"door": DOOR, "key": "bd_test", "partner": "zz-doortest"}, f)
+    ROOM["msgs"].append({"id": "stale", "from": "Monday", "ts": time.time() - 2 * 86400, "body": "two days old",
+                         "mine": False, "reply_to": None})
+    ROOM["msgs"].append({"id": "first", "from": "Monday", "ts": time.time() - 60, "body": "type /steward:start",
+                         "mine": False, "reply_to": None})
     rc, out = watch()
-    check("connected but nothing shared: the watch does not even ask the door", rc == 0 and out == "", out)
+    check("connected, never shared: the house still reaches it (1.7.4), the last day only",
+          rc == 0 and "type /steward:start" in out and "two days old" not in out, out)
+    rc, out = watch()
+    check("connected, never shared: shown once", rc == 0 and out == "", out)
     old = time.time() - 5
     ROOM["msgs"].append({"id": "old", "from": "Monday", "ts": old, "body": "an answer from before", "mine": False,
                          "reply_to": None})
+    rc, out = watch()
+    check("a message after the first look is shown too", rc == 0 and "an answer from before" in out, out)
     fn = os.path.join(tmp, "t.txt")
     with open(fn, "w", encoding="utf-8") as f:
         f.write("claude is not recognized\n")
@@ -102,7 +111,7 @@ try:
           ROOM["posts"][-1] == {"need": "read the cookie jar", "why": "a Maytag check", "text": "one job a day"}, out)
     ROOM["msgs"].pop()                 # the stub keeps it as "mine"; it would never be a reply anyway
     rc, out = share("replies")
-    check("an answer from before the first share is not new", rc == 0 and "No answer yet" in out, out)
+    check("an answer the watch already showed is not new to replies", rc == 0 and "No answer yet" in out, out)
     rc, out = watch()
     check("its own share never comes back as an answer", rc == 0 and out == "", out)
     ROOM["msgs"].append({"id": "a1", "from": "Monday", "ts": time.time() + 0.0000004, "body": "Use the PowerShell line.",
@@ -126,7 +135,7 @@ try:
         json.dump(st, f)
     ROOM["msgs"].append({"id": "a2", "from": "Omero", "ts": time.time(), "body": "late", "mine": False, "reply_to": None})
     rc, out = watch()
-    check("two weeks after the last share the watch stops looking", rc == 0 and out == "", out)
+    check("two weeks after the last share the watch still looks (1.7.4)", rc == 0 and "late" in out, out)
     st["last_share"] = time.time()
     with open(os.path.join(RH, "share.json"), "w", encoding="utf-8") as f:
         json.dump(st, f)
