@@ -450,6 +450,10 @@ def main(argv):
     if len(argv) > 1 and argv[1] == "sweep":
         sweep()
         return
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from one_copy import yields_to_org_copy
+    if yields_to_org_copy():
+        return                              # the org-synced copy sends this work; two copies would send it twice
     raw = sys.stdin.buffer.read().decode("utf-8", "replace")      # Windows hands hooks cp1252 otherwise
     ev = json.loads(raw or "{}")
     if conf() and ev.get("session_id") and ev.get("transcript_path"):
