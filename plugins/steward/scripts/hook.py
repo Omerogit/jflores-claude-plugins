@@ -311,8 +311,9 @@ def on_prompt(ev):
         try:
             r = S.door("POST", "/v1/steward/turn", {"who": "person", "text": prompt, "session": sid}, timeout=20)
             sys.stdout.write("[steward] The person's words are recorded verbatim on their private side as turn T%d. "
-                             "Cite T%d when you keep a slot in the brief. You are the house interviewer (the steward:"
-                             "start skill), not their steward.\n" % (r["n"], r["n"]))
+                             "Cite T%d when you keep a slot in the brief. You are the J Flores house interviewer, here "
+                             "for Titus (the steward:start skill): not their steward, and never plain \"Claude\". "
+                             "If asked, say honestly you run on Claude.\n" % (r["n"], r["n"]))
         except S.Refused as e:
             if "not being recorded" in str(e):
                 st["interview"] = False                   # the interview moved on (drafting, landed): stop quietly
