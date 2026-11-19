@@ -6,6 +6,8 @@ Brain. This machine holds no Brain credential: it holds one key, for one person,
 Omero sends (the same key the refocus plugin uses; connecting either plugin connects both). Standard library only.
 
     steward.py connect <link>        use the one-time link Omero sent
+    steward.py files                  the files you sent your steward on Telegram (id, size, when)
+    steward.py file <id> --out PATH   save one to this computer; size and sha256 are checked against the server's copy
     steward.py thread-connect <link>  use the one-time claim link from your steward's own door (the laptop half of
                                       the one thread with their Telegram side; w-d722be54)
     steward.py start                 /steward:start: check, then begin or pick up where you left off
@@ -280,6 +282,105 @@ def cmd_thread_connect(a):
     out("  token   stored in %s (this machine only; the link is now used up)" % THREAD_CONF)
 
 
+def thread_conf():
+    c = load_json(THREAD_CONF, None)
+    if not (c and c.get("base") and c.get("token")):
+        sys.exit("steward: this laptop's thread is not connected yet (steward.py thread-connect <link>)")
+    return c
+
+
+def cmd_files(a):
+    """The files this person sent their steward on Telegram, from their own steward's door only (2026-11-18)."""
+    c = thread_conf()
+    st, b = http("GET", c["base"].rstrip("/") + "/files", key=c["token"])
+    if st == 401:
+        sys.exit("steward: the thread door does not accept this laptop's token (reconnect with a new link)")
+    if st != 200:
+        out("steward: the door refused: %s" % b.get("error", "HTTP %d" % st))
+        sys.exit(5)
+    rows = b.get("files") or []
+    if not rows:
+        out("no files yet")
+    for r in rows:
+        out("%-14s %10d bytes  %s" % (r["name"], r["size"], time.strftime("%Y-%m-%d %H:%M", time.localtime(r["saved"]))))
+
+
+def cmd_file(a):
+    """Fetch one file by id and write it only when its size and sha256 match what the server read from its own copy."""
+    c = thread_conf()
+    fid = a.id.strip()
+    if not re.match(r"^\d{1,10}(\.[A-Za-z0-9]{1,6})?$", fid):
+        sys.exit("steward: a file id looks like 283 or 283.pdf (see: steward.py files)")
+    req = urllib.request.Request(c["base"].rstrip("/") + "/files/" + fid, headers={
+        "Authorization": "Bearer " + c["token"], "User-Agent": UA})
+    try:
+        r = urllib.request.urlopen(req, timeout=120)
+    except urllib.error.HTTPError as e:
+        try:
+            why = json.loads(e.read().decode("utf-8") or "{}").get("error")
+        except ValueError:
+            why = None
+        out("steward: the door refused: %s" % (why or "HTTP %d" % e.code))
+        sys.exit(5)
+    want_size, want_sha = r.headers.get("x-file-size"), (r.headers.get("x-file-sha256") or "").lower()
+    m = re.search(r'filename="([^"/\\]+)"', r.headers.get("content-disposition") or "")
+    name = m.group(1) if m else fid
+    dest = os.path.abspath(a.out)
+    if os.path.isdir(dest):
+        dest = os.path.join(dest, name)
+    if os.path.exists(dest) and not a.force:
+        r.close()
+        sys.exit("steward: %s already exists (use --force to replace it)" % dest)
+    os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+    part, h, n = dest + ".part", hashlib.sha256(), 0
+    with open(part, "wb") as f:
+        for b in iter(lambda: r.read(65536), b""):
+            f.write(b)
+            h.update(b)
+            n += len(b)
+    r.close()
+    if not want_sha or not want_size or str(n) != want_size or h.hexdigest() != want_sha:
+        os.remove(part)
+        out("VERIFY FAIL  %s: got %d bytes sha256 %s, the server's copy is %s bytes sha256 %s. Nothing was saved." % (
+            fid, n, h.hexdigest()[:12], want_size or "?", want_sha[:12] or "?"))
+        sys.exit(4)
+    os.replace(part, dest)
+    out("FETCHED  %s -> %s" % (name, dest))
+    out("  %d bytes  sha256 %s  VERIFIED against the server's copy" % (n, want_sha))
+
+
+def cmd_ask(a):
+    """Ask this steward's server seat from the laptop and read its answer in the thread. The seat answers in the room
+    only: nothing goes to the person's phone (2026-11-18)."""
+    import uuid
+    c = thread_conf()
+    base = c["base"].rstrip("/")
+    text = (a.question or "").strip()
+    if not text:
+        sys.exit("steward: an empty question")
+    st, b = http("POST", base + "/ask", key=c["token"], body={"id": "ask-" + uuid.uuid4().hex, "text": text})
+    if st == 401:
+        sys.exit("steward: the thread door does not accept this laptop's token (reconnect with a new link)")
+    if st != 200 or not b.get("ok"):
+        out("steward: the door refused: %s" % b.get("error", "HTTP %d" % st))
+        sys.exit(5)
+    mid, wait_s = b["mid"], max(0, int(a.wait))
+    out("ASKED  %s (waiting up to %ds for your steward's seat to answer in the thread)" % (mid, wait_s))
+    deadline, since = time.time() + wait_s, 0.0
+    while True:
+        st, b = http("GET", base + "/thread?since=%s" % since, key=c["token"])
+        if st == 200:
+            for ln in b.get("lines") or []:
+                if ln.get("reply_to") == mid and ln.get("kind") == "say":
+                    out("ANSWER  %s" % ln.get("body"))
+                    return
+        if time.time() >= deadline:
+            out("NO ANSWER YET after %ds. The ask %s is in the thread; the seat may be busy. Read the thread again "
+                "later; do not ask twice." % (wait_s, mid))
+            sys.exit(8)
+        time.sleep(3)
+
+
 def cmd_whoami(a):
     w = door("GET", "/v1/whoami")
     out("STEWARD whoami  %s (%s, for %s)  person side: %s" % (w["partner"], w.get("kind"), w["person"],
@@ -508,6 +609,14 @@ def main():
     ls.add_argument("--folder")
     rd = sub.add_parser("read")
     rd.add_argument("id")
+    sub.add_parser("files")
+    ak = sub.add_parser("ask")
+    ak.add_argument("question")
+    ak.add_argument("--wait", type=int, default=180)
+    fl = sub.add_parser("file")
+    fl.add_argument("id")
+    fl.add_argument("--out", required=True)
+    fl.add_argument("--force", action="store_true")
     # brief/note's trailing "-" ("the text is on stdin", SKILL.md's own `steward.py brief <slot> --turns 7 -`)
     # is stripped here, before argparse ever sees it: a required positional (slot) plus an optional that takes
     # a value (--turns) ahead of a trailing nargs='?' positional is a known argparse ambiguity (reproduces on
@@ -526,7 +635,7 @@ def main():
          "welcome": cmd_welcome,
          "status": cmd_status, "brief": cmd_brief, "finish": cmd_finish, "draft": cmd_draft, "ratify": cmd_ratify,
          "pause": cmd_pause, "resume": cmd_resume, "wakeline": cmd_wakeline, "note": cmd_note, "move": cmd_move, "list": cmd_list,
-         "read": cmd_read}[a.cmd](a)
+         "read": cmd_read, "files": cmd_files, "file": cmd_file, "ask": cmd_ask}[a.cmd](a)
     except NoBrain as e:
         out("+----------------------------------------------------------------------------+")
         out("| NOT CONNECTED - this Claude Code is not connected to the company Brain yet. |")
