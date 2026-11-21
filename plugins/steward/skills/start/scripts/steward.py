@@ -566,6 +566,23 @@ def cmd_read(a):
     out(b["text"])
 
 
+def cmd_board(a):
+    """[BOARD READ 2026-11-21, Omero's yes f0e4b22404b8] Your person's own open board, READ ONLY: who asked, how old,
+    the one-line ask. The door decides whose board from this machine's key; nothing here can name another person, and
+    there is no way to answer, close or pass a case from here."""
+    b = door("GET", "/v1/board")
+    who = (b.get("person") or "").capitalize()
+    if not b.get("board"):
+        out("STEWARD board  %s has no board on the server." % who)
+        return
+    out("STEWARD board  %s: %d open (read only)" % (who, b.get("count", 0)))
+    for c in b.get("cases", []):
+        bits = [c["case"], c.get("age") or "", "asked by %s" % (c.get("asked_by") or "?"), c.get("ask") or ""]
+        if c.get("job"):
+            bits.append("#%s" % c["job"])
+        out("  " + " \u00b7 ".join(x for x in bits if x))
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         try:
@@ -610,6 +627,7 @@ def main():
     rd = sub.add_parser("read")
     rd.add_argument("id")
     sub.add_parser("files")
+    sub.add_parser("board")
     ak = sub.add_parser("ask")
     ak.add_argument("question")
     ak.add_argument("--wait", type=int, default=180)
@@ -635,7 +653,7 @@ def main():
          "welcome": cmd_welcome,
          "status": cmd_status, "brief": cmd_brief, "finish": cmd_finish, "draft": cmd_draft, "ratify": cmd_ratify,
          "pause": cmd_pause, "resume": cmd_resume, "wakeline": cmd_wakeline, "note": cmd_note, "move": cmd_move, "list": cmd_list,
-         "read": cmd_read, "files": cmd_files, "file": cmd_file, "ask": cmd_ask}[a.cmd](a)
+         "read": cmd_read, "files": cmd_files, "file": cmd_file, "ask": cmd_ask, "board": cmd_board}[a.cmd](a)
     except NoBrain as e:
         out("+----------------------------------------------------------------------------+")
         out("| NOT CONNECTED - this Claude Code is not connected to the company Brain yet. |")

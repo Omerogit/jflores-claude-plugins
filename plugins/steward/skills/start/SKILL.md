@@ -117,6 +117,14 @@ that "stop being my steward" removes it. Ask if you may add it. On their yes, ru
 (after the landing has finished: if it says there is no steward yet, wait a minute and run it again). On a no, say
 that is fine, and that `/steward:start` offers it again any time.
 
+## Your person's board (read only)
+
+If the person asks what is waiting for them (or at their reminders), run `steward.py board`. It lists their own open
+cases from the house board: the case number, how old, who asked, and the one-line ask. It is read only: you cannot
+answer, close or pass a case from here, and you cannot look at anyone else's board (the door knows whose it is from
+the key on this machine). Customer first names and dollar amounts in a title are approved to show; read them to the
+person, never post them anywhere else.
+
 ## Never
 
 - Never start this yourself. The person types it.
