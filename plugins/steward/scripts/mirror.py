@@ -53,7 +53,37 @@ RESUME_RX = re.compile(r"^\s*(?:(?:ok(?:ay)?|yes|alright|all right)[\s,.!]+)?(?:
                        r"back|go back)\s+)?(?:back\s+)?on[\s_-]+(?:the[\s_-]+)?record\b[\s.!]*(?:now|again|please)?"
                        r"[\s.!]*$", re.I)
 RESUME_MAX = 60
-SEEN_RX = re.compile(r"\bMonday\b[\s\S]*\boff the record\b|\boff the record\b[\s\S]*\bMonday\b", re.I)
+# THE NOTICE IS A FIXED TEXT (Bez, r2: two keywords in a free answer proved nothing - "Only Monday can read this; say
+# 'off the record'" passed). The steward puts one of these in its answer word for word, and only an answer that carries
+# one WHOLE (spacing, quote marks and markdown aside), with nothing saying "only Monday", lets sharing begin.
+NOTICES = {
+    "en": ("Monday and others with access to your help room can read what you type here and what {a} answers, so we "
+           "can help {a} support your work. These messages stay in the Office and aren't sent to anyone's phone. Say "
+           "'off the record' to pause sharing, and 'on the record' to resume. Your interview and {a}'s private notes "
+           "aren't copied into the room. Don't type passwords, keys or card details here."),
+    "es": ("Monday y otras personas con acceso a tu sala de ayuda pueden leer lo que escribes aquí y lo que {a} "
+           "responde, para que podamos ayudar a {a} a apoyar tu trabajo. Estos mensajes se quedan en la Oficina y no se "
+           "envían al teléfono de nadie. Di 'off the record' para pausar lo que se comparte, y 'on the record' para "
+           "reanudarlo. Tu entrevista y las notas privadas de {a} no se copian a la sala. No escribas contraseñas, "
+           "claves ni datos de tarjetas aquí."),
+}
+CONTRADICTS_RX = re.compile(r"\bonly monday\b|\bs[oó]lo monday\b|\bnobody else\b|\bnadie m[aá]s\b")
+
+
+def _norm(t):
+    t = (t or "").replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", "'").replace("\u201d", "'")
+    t = t.replace('"', "'").replace("*", "").replace("_", " ")
+    t = re.sub(r"(?m)^\s*>\s?", "", t)
+    return re.sub(r"\s+", " ", t).strip().lower()
+
+
+def notice_delivered(reply, w):
+    """True only when the answer carries one fixed notice whole and nothing in it contradicts the audience."""
+    n = _norm(reply)
+    if not n or CONTRADICTS_RX.search(n):
+        return False
+    a = _names(w)[1]
+    return any(_norm(t.format(a=a)) in n for t in NOTICES.values())
 PRIVATE_RX = re.compile(r"steward\.py\s+(?:start|brief|draft|ratify|finish|pause)\b|--side[ =]person\b|"
                         r"\"side\"\s*:\s*\"person\"|/steward:start\b")
 NOT_HIS = re.compile(r"^\s*<")
@@ -227,13 +257,11 @@ def _names(w):
 
 def tell_line(w):
     p, a = _names(w)
-    return ("[steward] Before anything of this conversation is shared, tell %s this at the start of your answer, in "
-            "their language, keeping every point and naming Monday and \"off the record\": \"Monday and others with "
-            "access to your help room can read what you type here and what %s answers, so we can help %s support your "
-            "work. These messages stay in the Office and aren't sent to anyone's phone. Say 'off the record' to pause "
-            "sharing, and 'on the record' to resume. Your interview and %s's private notes aren't copied into the "
-            "room. Don't type passwords, keys or card details here.\" Nothing is shared until your answer has said "
-            "it.\n" % (p, a, a, a))
+    return ("[steward] Before anything of this conversation is shared, %s must be told who can read it. Start your "
+            "answer with this notice as its own paragraph, copied exactly, word for word (if %s writes to you in "
+            "Spanish, use the Spanish one exactly instead), and add nothing that narrows who can read it:\n%s\n(Spanish: "
+            "%s)\nNothing is shared until an answer carries the notice whole; until then this instruction comes "
+            "back.\n" % (p, p, NOTICES["en"].format(a=a), NOTICES["es"].format(a=a)))
 
 
 def record_switch(prompt):
@@ -413,7 +441,7 @@ def on_stop(ev, w, reply):
         return
     if op.get("telling"):
         g = _load(STATE, {})
-        if SEEN_RX.search(reply or ""):
+        if notice_delivered(reply, w):
             g["told"] = time.time()
             _save(STATE, g)
             log("the notice was in the answer: sharing starts with the next exchange")

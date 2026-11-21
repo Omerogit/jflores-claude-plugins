@@ -100,12 +100,11 @@ turn(hook, home, SID, "what is due today?", "Reliable, $410.")
 check("a desk that is not a steward sends nothing", sent == [], sent)
 
 # 2. the notice comes first, and nothing is shared until an answer the person saw carried it (Bez, r1)
-NOTICE = ("Monday and others with access to your help room can read what you type here and what Mandela answers. "
-          "Say 'off the record' to pause sharing.")
 hook, M, home, sent, up = fresh(told=False)
+NOTICE = M.NOTICES["en"].format(a="Mandela")                       # the whole fixed notice (Bez r2: the fixture was partial)
 first = said_on_prompt(hook, SID, "hello Mandela", home)
-check("the first prompt carries the notice instruction, naming others with access and passwords",
-      "Monday and others with access" in first and "Don't type passwords" in first and "off the record" in first, first)
+check("the first prompt carries the whole fixed notice to copy, English and Spanish",
+      NOTICE in first and M.NOTICES["es"].format(a="Mandela") in first and "word for word" in first, first)
 # the answer was cancelled: no Stop. The next prompt carries it again, and nothing has been shared
 again = said_on_prompt(hook, SID, "try again", home)
 check("a cancelled first answer leaves the notice pending: it comes again", "Monday and others with access" in again, again)
@@ -114,6 +113,25 @@ hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": tra
     {"type": "assistant", "message": {"content": [{"type": "text", "text": "Hi Haru."}]}}])})
 check("an answer without the notice shares nothing and keeps it pending", sent == [] and not M._load(M.STATE, {}).get("told"),
       (sent, M._load(M.STATE, {})))
+# r2 negative controls (Bez): two keywords, a narrowed audience, a missing warning, a contradiction: all stay pending
+W = dict(STEWARD)
+for bad in ("We can ask Monday what 'off the record' means.",
+            "Only Monday can read this; say 'off the record' if needed.",
+            NOTICE.replace(" Don't type passwords, keys or card details here.", ""),
+            NOTICE + " Only Monday can read this, nobody else.",
+            NOTICE[:len(NOTICE) // 2]):
+    check("not a delivered notice: %r" % bad[:60], not M.notice_delivered(bad, W), bad)
+for good in ("Hi Haru!\n\n" + NOTICE + "\n\nNow, about Reliable...",
+             "**" + NOTICE.replace("'", "\u2019") + "**",
+             "> " + NOTICE.replace(". ", ".\n> "),
+             M.NOTICES["es"].format(a="Mandela") + " Hola Haru."):
+    check("a delivered notice: %r" % good[:40], M.notice_delivered(good, W), good)
+said_on_prompt(hook, SID, "hi", home)
+hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": transcript(home, [
+    {"type": "user", "message": {"content": "hi"}},
+    {"type": "assistant", "message": {"content": [{"type": "text", "text": "Only Monday can read this; say 'off the record' if needed."}]}}])})
+check("a narrowed-audience answer through the hooks: still pending, nothing shared",
+      sent == [] and not M._load(M.STATE, {}).get("told"), (sent, M._load(M.STATE, {})))
 third = said_on_prompt(hook, SID, "hello?", home)
 check("still pending after that answer", "Monday and others with access" in third, third)
 hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": transcript(home, [
