@@ -72,7 +72,8 @@ CONTRADICTS_RX = re.compile(r"\bonly monday\b|\bs[oó]lo monday\b|\bnobody else\
 
 def _norm(t):
     t = (t or "").replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", "'").replace("\u201d", "'")
-    t = t.replace('"', "'").replace("*", "").replace("_", " ")
+    t = t.replace('"', "'").replace("*", "").replace("_", " ").replace("`", "'")   # Bez r3: code style too
+    t = t.replace("'", "")                     # quote marks of any kind never decide whether the notice was given
     t = re.sub(r"(?m)^\s*>\s?", "", t)
     return re.sub(r"\s+", " ", t).strip().lower()
 

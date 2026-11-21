@@ -119,12 +119,17 @@ for bad in ("We can ask Monday what 'off the record' means.",
             "Only Monday can read this; say 'off the record' if needed.",
             NOTICE.replace(" Don't type passwords, keys or card details here.", ""),
             NOTICE + " Only Monday can read this, nobody else.",
-            NOTICE[:len(NOTICE) // 2]):
+            NOTICE[:len(NOTICE) // 2],
+            # 1.1.13 (Nathan): the quote-blind match must still refuse a dropped word and a narrowing, in code style too
+            NOTICE.replace(" can read what you type here", " can read what you type"),
+            NOTICE.replace("'", "`") + " Only Monday can read this.",
+            NOTICE.replace("'off the record'", "`off the record`").replace(" aren't sent", " sent")):
     check("not a delivered notice: %r" % bad[:60], not M.notice_delivered(bad, W), bad)
 for good in ("Hi Haru!\n\n" + NOTICE + "\n\nNow, about Reliable...",
              "**" + NOTICE.replace("'", "\u2019") + "**",
              "> " + NOTICE.replace(". ", ".\n> "),
-             M.NOTICES["es"].format(a="Mandela") + " Hola Haru."):
+             M.NOTICES["es"].format(a="Mandela") + " Hola Haru.",
+             NOTICE.replace("'off the record'", "`off the record`").replace("'on the record'", "`on the record`")):
     check("a delivered notice: %r" % good[:40], M.notice_delivered(good, W), good)
 said_on_prompt(hook, SID, "hi", home)
 hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": transcript(home, [
