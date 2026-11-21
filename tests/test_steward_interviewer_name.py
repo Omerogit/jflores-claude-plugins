@@ -43,6 +43,8 @@ check("each recorded turn's line names the J Flores house interviewer, here for 
 check("each recorded turn's line keeps it honest about running on Claude", "honestly you run on Claude" in line, line)
 
 ver = read(".claude-plugin", "plugin.json")
-check("plugin.json is 1.1.10", '"version": "1.1.10"' in ver)
+import re as _re
+_v = tuple(int(x) for x in (_re.search(r'"version": "(\d+)\.(\d+)\.(\d+)"', ver) or _re.search("()()()", "")).groups() if x)
+check("plugin.json is 1.1.10 or later (1.1.11 added the one thread)", _v >= (1, 1, 10), str(_v))
 print("%d failed" % fails)
 sys.exit(1 if fails else 0)

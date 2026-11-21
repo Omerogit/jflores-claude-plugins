@@ -46,6 +46,14 @@ POST_MAX = 20
 HTTP_TIMEOUT = 30
 OFF_RX = re.compile(r"\boff[\s_-]+(?:the[\s_-]+)?record\b", re.I)
 ON_RX = re.compile(r"\bon[\s_-]+(?:the[\s_-]+)?record\b", re.I)
+# Resuming is a command, never a mention (Nathan and Bez, r1: "not on the record" and "are we on the record or off the
+# record?" both reopened sharing). The prompt must START with it ("on the record", "ok, on the record", "back on the
+# record", "we're on the record"), be short, and ask nothing. Any mention of "off the record" pauses, even mixed in.
+RESUME_RX = re.compile(r"^\s*(?:(?:ok(?:ay)?|yes|alright|all right)[\s,.!]+)?(?:(?:we(?:'re| are)|go(?:ing)?|let's go|"
+                       r"back|go back)\s+)?(?:back\s+)?on[\s_-]+(?:the[\s_-]+)?record\b[\s.!]*(?:now|again|please)?"
+                       r"[\s.!]*$", re.I)
+RESUME_MAX = 60
+SEEN_RX = re.compile(r"\bMonday\b[\s\S]*\boff the record\b|\boff the record\b[\s\S]*\bMonday\b", re.I)
 PRIVATE_RX = re.compile(r"steward\.py\s+(?:start|brief|draft|ratify|finish|pause)\b|--side[ =]person\b|"
                         r"\"side\"\s*:\s*\"person\"|/steward:start\b")
 NOT_HIS = re.compile(r"^\s*<")
@@ -219,16 +227,32 @@ def _names(w):
 
 def tell_line(w):
     p, a = _names(w)
-    return ("[steward] Tell %s once, plainly, at the start of your answer, in your own words: from now on Monday sees "
-            "your conversations with %s here - what %s types and what %s answers - so she can help %s help %s. It "
-            "goes to the office, to no one's phone. Saying \"off the record\" stops it until %s says \"on the "
-            "record\". What %s keeps on %s's private side never goes.\n" % (p, a, p, a, a, p, p, a, p))
+    return ("[steward] Before anything of this conversation is shared, tell %s this at the start of your answer, in "
+            "their language, keeping every point and naming Monday and \"off the record\": \"Monday and others with "
+            "access to your help room can read what you type here and what %s answers, so we can help %s support your "
+            "work. These messages stay in the Office and aren't sent to anyone's phone. Say 'off the record' to pause "
+            "sharing, and 'on the record' to resume. Your interview and %s's private notes aren't copied into the "
+            "room. Don't type passwords, keys or card details here.\" Nothing is shared until your answer has said "
+            "it.\n" % (p, a, a, a))
+
+
+def record_switch(prompt):
+    """'off' (any mention of off the record, mixed or not), 'on' (a short command that starts with it), or None."""
+    t = prompt or ""
+    if OFF_RX.search(t):
+        return "off"
+    if ON_RX.search(t) and len(t.strip()) <= RESUME_MAX and "?" not in t and RESUME_RX.match(t):
+        return "on"
+    return None
 
 
 # ---------------------------------------------------------------- the outbox: one file per line
 def queue(sid, who, text, ts):
     os.makedirs(OUTBOX, exist_ok=True)
-    cid = "%d-%s" % (int(ts * 1000), uuid.uuid4().hex[:12])
+    # The outbox sends in name order, so the name is the time it was QUEUED (nanoseconds) and then the person before the
+    # steward: one turn's two lines never swap, even inside one clock tick.
+    cid = "%d-%s-%s" % (time.time_ns(), "p" if who == "person" else "s", uuid.uuid4().hex[:12])
+    sid = (re.sub(r"[^A-Za-z0-9_-]", "", sid or "")[:64] or "unknown").ljust(8, "0")
     item = {"id": cid, "who": who, "session": sid, "ts": ts, "text": cut(mask(text), CUT[who])}
     _save(os.path.join(OUTBOX, cid + ".json"), item)
     return cid
@@ -306,23 +330,29 @@ def on_prompt(ev, w, interview=False):
     ss["open"] = None
     g = _load(STATE, {})
     said = ""
-    if OFF_RX.search(prompt) and not ON_RX.search(prompt):
-        g["off"] = time.time()
+    p, a = _names(w)
+    sw = record_switch(prompt)
+    if sw == "off":
+        g["off"] = g.get("off") or time.time()
         _save(STATE, g)
         _save(sp, ss)
         log("off the record")
-        p, a = _names(w)
-        return ("[steward] %s said \"off the record\": nothing more from this computer goes to Monday until %s says "
-                "\"on the record\". You may tell %s so in one line.\n" % (p, p, p))
-    if ON_RX.search(prompt) and g.get("off"):
+        return ("[steward] Sharing with the office is now PAUSED (%s's message mentioned \"off the record\"): nothing "
+                "from this computer goes to the help room until %s sends \"on the record\" as its own short message. "
+                "Tell %s in one line that sharing is paused.\n" % (p, p, p))
+    if sw == "on" and g.get("off"):
         g.pop("off", None)
         _save(STATE, g)
         log("on the record")
-        p, a = _names(w)
-        said = "[steward] %s said \"on the record\": Monday sees this conversation again from here.\n" % p
+        said = ("[steward] Sharing with the office is ON again from this message (%s said \"on the record\"). Tell %s "
+                "in one line that sharing has resumed.\n" % (p, p))
+    elif ON_RX.search(prompt):
+        said = ("[steward] Sharing with the office is %s. %s's message mentioned \"on the record\" but did not resume "
+                "it: only \"on the record\" sent as its own short message does. If %s is asking, tell them the "
+                "state.\n" % ("PAUSED" if g.get("off") else "ON", p, p))
     if g.get("off"):
         _save(sp, ss)
-        return ""
+        return said
     if interview or ss.get("private") or PRIVATE_RX.search(prompt):
         ss["private"] = True
         _save(sp, ss)
@@ -336,11 +366,12 @@ def on_prompt(ev, w, interview=False):
     except OSError:
         off = 0
     ss["open"] = {"text": prompt, "ts": time.time(), "offset": off}
-    _save(sp, ss)
     if not g.get("told"):
-        g["told"] = time.time()
-        _save(STATE, g)
+        # The notice comes first (Bez, r1): this turn only carries it, and nothing is shared until an answer the
+        # person saw has said it (on_stop reads the answer). A cancelled answer leaves it pending, so it comes again.
+        ss["open"]["telling"] = True
         said += tell_line(w)
+    _save(sp, ss)
     if waiting():
         spawn_flush()                         # what an earlier turn could not send goes now
     return said
@@ -380,6 +411,16 @@ def on_stop(ev, w, reply):
         _save(sp, ss)
         log("a conversation touched the person side: kept here from now on")
         return
+    if op.get("telling"):
+        g = _load(STATE, {})
+        if SEEN_RX.search(reply or ""):
+            g["told"] = time.time()
+            _save(STATE, g)
+            log("the notice was in the answer: sharing starts with the next exchange")
+        else:
+            log("the answer did not carry the notice: still pending")
+        _save(sp, ss)
+        return                                   # the notice turn itself is never shared
     _save(sp, ss)
     queue(sid, "person", op["text"], op.get("ts") or time.time())
     if (reply or "").strip():

@@ -69,9 +69,11 @@ This is getting to know someone, not scoping a job. A steward has no single job:
 - **Be honest when they ask** what a steward is: not Monday; pays for nothing (gets a purchase ready, and they decide
   and pay); emails customers only their way (a draft they send, until they say otherwise); formed in a house with
   Christ at the center, which asks nothing of their own faith; the memory has two sides, and they can see both.
-  And once their steward is working, Monday sees their conversations with it (what they type and what it
-  answers), so she can help it help them: in the office, never on anyone's phone, never their private side, and
-  "off the record" stops it until they say "on the record". Tell them this plainly, once, before the end.
+  And once their steward is working, Monday and others with access to their help room can read what they type to
+  their steward and what their steward answers, so the house can help their steward support their work. Those
+  messages stay in the Office and aren't sent to anyone's phone. "Off the record" pauses sharing and "on the record"
+  resumes it. This interview and their steward's private notes aren't copied into the room. They shouldn't type
+  passwords, keys or card details there. Tell them this plainly, once, before the end.
 - **If they want to stop**, say it is saved and `/steward:start` picks up where they left off, then run
   `steward.py pause`.
 - **Near the end, the name** ("what would you like to call your steward? You can also decide after you read the

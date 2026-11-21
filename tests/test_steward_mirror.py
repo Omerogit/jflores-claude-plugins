@@ -26,7 +26,7 @@ def check(name, cond, detail=""):
         FAILS.append(name)
 
 
-def fresh(who=STEWARD, door_up=True):
+def fresh(who=STEWARD, door_up=True, told=True):
     home = tempfile.mkdtemp(prefix="steward-mirror-")
     os.environ["STEWARD_HOME"] = home
     for m in ("hook", "steward", "thread_client", "mirror", "_mirror_mutant"):
@@ -54,6 +54,8 @@ def fresh(who=STEWARD, door_up=True):
     S.http = http
     M.S = S
     M.spawn_flush = M.flush                 # in the test the background send runs inline
+    if told:
+        M._save(M.STATE, {"told": 1.0})     # the notice already delivered (section 2 tests the delivery itself)
     return hook, M, home, sent, up
 
 
@@ -97,25 +99,37 @@ hook, M, home, sent, up = fresh(DESK)
 turn(hook, home, SID, "what is due today?", "Reliable, $410.")
 check("a desk that is not a steward sends nothing", sent == [], sent)
 
-# 2. a steward: the person's words and the answer, masked, in order; told once
-hook, M, home, sent, up = fresh()
+# 2. the notice comes first, and nothing is shared until an answer the person saw carried it (Bez, r1)
+NOTICE = ("Monday and others with access to your help room can read what you type here and what Mandela answers. "
+          "Say 'off the record' to pause sharing.")
+hook, M, home, sent, up = fresh(told=False)
 first = said_on_prompt(hook, SID, "hello Mandela", home)
-check("the first prompt tells the person once that Monday sees it", "Monday sees" in first and "off the record" in first,
-      first)
+check("the first prompt carries the notice instruction, naming others with access and passwords",
+      "Monday and others with access" in first and "Don't type passwords" in first and "off the record" in first, first)
+# the answer was cancelled: no Stop. The next prompt carries it again, and nothing has been shared
+again = said_on_prompt(hook, SID, "try again", home)
+check("a cancelled first answer leaves the notice pending: it comes again", "Monday and others with access" in again, again)
 hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": transcript(home, [
-    {"type": "user", "message": {"content": "hello Mandela"}},
+    {"type": "user", "message": {"content": "try again"}},
     {"type": "assistant", "message": {"content": [{"type": "text", "text": "Hi Haru."}]}}])})
-second = said_on_prompt(hook, SID, "pay Reliable with card %s" % CARD, home)
-check("never told twice", "Monday sees" not in second, second)
+check("an answer without the notice shares nothing and keeps it pending", sent == [] and not M._load(M.STATE, {}).get("told"),
+      (sent, M._load(M.STATE, {})))
+third = said_on_prompt(hook, SID, "hello?", home)
+check("still pending after that answer", "Monday and others with access" in third, third)
+hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": transcript(home, [
+    {"type": "user", "message": {"content": "hello?"}},
+    {"type": "assistant", "message": {"content": [{"type": "text", "text": NOTICE + " Hi Haru."}]}}])})
+check("the notice turn itself is never shared", sent == [], sent)
+check("once an answer carried it, it is marked told", bool(M._load(M.STATE, {}).get("told")))
+fourth = said_on_prompt(hook, SID, "pay Reliable with card %s" % CARD, home)
+check("never told twice", "Monday and others" not in fourth, fourth)
 hook.one_thread_to_the_office("Stop", {"session_id": SID, "transcript_path": transcript(home, [
     {"type": "user", "message": {"content": "pay Reliable with card %s" % CARD}},
     {"type": "assistant", "message": {"content": [{"type": "text", "text": "Queued for your yes."}]}}])})
-check("four lines went, person then steward, twice", [it["who"] for it in sent] == ["person", "steward", "person",
-                                                                                   "steward"], sent)
-check("the words are the person's and the steward's", sent and sent[0]["text"] == "hello Mandela"
-      and sent[1]["text"] == "Hi Haru." and sent[3]["text"] == "Queued for your yes.", sent)
+check("sharing starts with the next exchange: person then steward", [it["who"] for it in sent] == ["person", "steward"]
+      and sent[1]["text"] == "Queued for your yes.", sent)
 check("the card number was masked before it left", all(CARD not in it["text"] for it in sent)
-      and "[masked]" in sent[2]["text"], sent[2:3])
+      and "[masked]" in sent[0]["text"], sent[:1])
 check("the outbox is empty once the door settled them", M.waiting() == [], M.waiting())
 
 # 3. off the record, then on the record
@@ -128,9 +142,22 @@ turn(hook, home, SID, "my salary question", "Answered.")
 check("nothing goes while off the record", len(sent) == n0, sent[n0:])
 turn(hook, home, "2222bbbb-0000-4000-8000-00000000000b", "a new conversation", "still off")
 check("off the record holds across conversations on this computer", len(sent) == n0, sent[n0:])
+for p_ in ("not on the record", "are we on the record or off the record?", "I said on the record yesterday, not now",
+           "are we on the record?", "he wrote 'on the record' in the email", "never on the record, ok"):
+    out_ = said_on_prompt(hook, SID, p_, home)
+    check("still paused after %r" % p_, M._load(M.STATE, {}).get("off") and "resumed" not in out_, out_)
+turn(hook, home, SID, "a question after those", "answer")
+check("nothing went after any of those", len(sent) == n0, sent[n0:])
+st_ = said_on_prompt(hook, SID, "are we on the record?", home)
+check("a question about it is answered with the real state", "PAUSED" in st_, st_)
 turn(hook, home, SID, "back on the record now", "Noted.")
 check("on the record: that turn goes again", [it["text"] for it in sent[n0:]] == ["back on the record now", "Noted."],
       sent[n0:])
+
+hook, M, home, sent, up = fresh()
+mixed = said_on_prompt(hook, SID, "are we on the record or off the record?", home)
+check("from sharing ON, mixed on/off wording pauses (fails closed)", M._load(M.STATE, {}).get("off") and "PAUSED" in mixed,
+      mixed)
 
 # 4. the interview never goes
 hook, M, home, sent, up = fresh()
