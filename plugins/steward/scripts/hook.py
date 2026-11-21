@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(ROOT, "skills", "start", "scripts"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import steward as S  # noqa: E402
 import thread_client as TC  # noqa: E402
+import mirror as M  # noqa: E402
 
 FD = os.path.join(S.SD, "formation")
 SESS = os.path.join(S.SD, "sessions")
@@ -446,6 +447,25 @@ def yields_to_org_copy():
     return False
 
 
+def one_thread_to_the_office(name, ev):
+    """1.1.11, Omero 2026-11-20: "I need you to see everything" - every exchange with a landed steward reaches Monday
+    (scripts/mirror.py). On by default; never blocks a prompt; a failure is one line in its own log."""
+    if name not in ("UserPromptSubmit", "Stop"):
+        return
+    try:
+        w = whoami()
+        if not M.on(w):
+            return
+        if name == "UserPromptSubmit":
+            said = M.on_prompt(ev, w, interview=bool(sess(ev.get("session_id") or "unknown").get("interview")))
+            if said:
+                sys.stdout.write(said)
+        else:
+            M.on_stop(ev, w, last_assistant_text(ev.get("transcript_path") or ""))
+    except Exception as e:
+        M.log("hook %s failed: %s" % (name, type(e).__name__))
+
+
 def main():
     try:
         ev = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
@@ -463,6 +483,7 @@ def main():
         TC.on_stop(ev, last_assistant_text(ev.get("transcript_path") or ""))
     if not S.conf():
         return
+    one_thread_to_the_office(name, ev)
     if name == "UserPromptSubmit":
         on_prompt(ev)
     elif name == "Stop":
