@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # The steward plugin's PreToolUse guard: no search or recursive listing over a OneDrive folder.
 #
-# Why (steward 1.1.15, 2026-11-23): on Windows, OneDrive's Files On-Demand keeps most files as cloud-only placeholders,
+# Why (steward 1.1.15, 2026-11-23; widened in 1.1.16): on Windows, OneDrive's Files On-Demand keeps most files as cloud-only placeholders,
 # and READING one downloads it. On 11-22 a steward's search walked Omar's local OneDrive and began pulling the whole
 # tree onto his disk; only he could stop it, by clicking into the Claude Code window. A person's steward must never do
 # that again, so this hook refuses, BEFORE the tool runs:
@@ -35,6 +35,11 @@ REFUSAL = ("Not run: this would search or list a OneDrive folder (%s). On this l
 SEARCHERS = {"rg", "ripgrep", "ag", "ack", "fd", "fdfind", "find", "tree", "du", "findstr", "select-string", "sls"}
 GREPS = {"grep", "egrep", "fgrep", "zgrep"}
 LISTERS = {"ls", "dir", "gci", "get-childitem"}
+# 1.1.16: copies and archives read (so download) every file they take. Always walk a folder:
+COPY_ALWAYS = {"robocopy", "xcopy", "rsync", "zip", "7z", "7za", "tar"}
+# ... and these only when recursive or given a wildcard:
+COPY_FLAGGED = {"cp", "copy", "mv", "move", "scp", "copy-item", "cpi", "move-item"}
+WRAPPERS = {"powershell", "pwsh", "bash", "sh", "zsh", "cmd", "wsl"}
 READERS = {"cat", "type", "gc", "get-content", "head", "tail", "wc", "more", "less", "bat"}
 SHELL_CD = {"cd", "chdir", "pushd", "set-location", "sl"}
 WORD = re.compile(r"""("(?:[^"\\]|\\.)*"|'[^']*'|[^\s"';|&<>()]+)""")
@@ -158,6 +163,21 @@ def above_onedrive(p, env):
             return True
     if re.match(r"^([a-z]:)?/(users|home)(/[^/]+)?$", p) or re.match(r"^[a-z]:/?$", p) or p == "/":
         return True
+    # 1.1.16: WSL (/mnt/c/Users/omar) and Git Bash (/c/Users/omar) spellings of the same folders
+    if re.match(r"^/(mnt/)?[a-z](/users(/[^/]+)?)?$", p):
+        return True
+    return False
+
+
+def wild_descends(p, env):
+    """1.1.16: a wildcard in a folder name (not the last part) walks INTO every folder it matches, so C:/Users/omar/*/*.txt
+    reaches OneDrive when C:/Users/omar is home or above it."""
+    parts = p.split("/")
+    for i, seg in enumerate(parts[:-1]):
+        if is_wild(seg):
+            prefix = "/".join(parts[:i]) or "/"
+            if above_onedrive(prefix, env):
+                return True
     return False
 
 
@@ -168,7 +188,7 @@ def reaches(p, env, tok="", single_ok=True):
         return None
     if single_ok and not is_wild(tok) and os.path.isfile(p):
         return None
-    if inside_onedrive(p, env) or above_onedrive(p, env):
+    if inside_onedrive(p, env) or above_onedrive(p, env) or wild_descends(p, env):
         return p
     return None
 
@@ -210,11 +230,26 @@ def looks_like_path(t):
         bool(re.match(r"^[/\\]", t) and len(t) > 1 and not re.match(r"^/[a-z]$", t, re.I))
 
 
-def check_shell(ev, env, cwd):
+SUBST = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")
+
+
+def check_shell(ev, env, cwd, depth=0):
     cmd = (ev.get("tool_input") or {}).get("command") or ""
+    return check_cmd(cmd, env, cwd, depth)
+
+
+def check_cmd(cmd, env, cwd, depth=0):
     cur = cwd
     mentions = None
-    for seg in split_commands(cmd):
+    if depth < 4:
+        # 1.1.16: a search inside $(...) or backticks runs too, so judge what is inside it
+        for m in SUBST.finditer(cmd):
+            inner = m.group(1) or m.group(2) or ""
+            hit = check_cmd(inner, env, cwd, depth + 1)
+            if hit:
+                return hit
+    segs = split_commands(cmd)
+    for k, seg in enumerate(segs):
         toks = tokens(seg)
         if not toks:
             continue
@@ -233,6 +268,24 @@ def check_shell(ev, env, cwd):
                 if np_:
                     cur = np_
             continue
+        if base in WRAPPERS and depth < 4:
+            # 1.1.16: powershell -Command "..." / bash -c "..." / wsl ...: judge the command inside the quotes
+            for a in args:
+                if len(a) > 2 and a[0] in "\"'" and a[-1] == a[0]:
+                    hit = check_cmd(a[1:-1], env, cur, depth + 1)
+                    if hit:
+                        return hit
+        if base == "xargs" and k > 0:
+            # 1.1.16: ls | xargs grep reads every file the left side names
+            rest = [a for a in args if not a.startswith("-")]
+            if rest and (os.path.basename(rest[0]).lower() in GREPS | READERS | SEARCHERS | COPY_ALWAYS | COPY_FLAGGED):
+                ptoks = tokens(segs[k - 1])
+                ppaths = [a for a in ptoks[1:] if not a.startswith("-") and looks_like_path(a)]
+                for p in (ppaths or ["."]):
+                    hit = reaches(expand(p, env, cur), env, p, single_ok=False)
+                    if hit:
+                        return hit
+            continue
         flags = [a for a in args if a.startswith("-") or re.match(r"^/[A-Za-z]$", a)]
         flagstr = " ".join(flags).lower()
         paths = [a for a in args if not a.startswith("-") and not re.match(r"^/[A-Za-z]$", a) and looks_like_path(a)]
@@ -246,7 +299,13 @@ def check_shell(ev, env, cwd):
                 recursive = any(is_wild(p) for p in paths) or not paths or True
         elif base in GREPS:
             recursive = bool(re.search(r"(^| )-[a-z]*r|--recursive|-d recurse|--directories=recurse", flagstr, re.I)) \
-                or bool(re.search(r"(^| )-[a-z]*R", " ".join(flags)))
+                or bool(re.search(r"(^| )-[a-z]*R", " ".join(flags))) \
+                or any(is_wild(p) for p in paths)      # 1.1.16: grep foo OneDrive*/* reads every file the shell matched
+        elif base in COPY_ALWAYS:
+            recursive = True
+        elif base in COPY_FLAGGED:
+            recursive = bool(re.search(r"(^| )-[a-z]*[raR]|-recurse|(^| )/[se]\b|--recursive|--archive", flagstr + " ")) \
+                or any(is_wild(p) for p in paths)
         elif base in LISTERS:
             recursive = bool(re.search(r"-r(ecurse)?\b|(^| )/s\b|(^| )-[a-z]*r", flagstr + " "))
             recursive = recursive or any(is_wild(p) for p in paths)
