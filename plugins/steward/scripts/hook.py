@@ -466,6 +466,22 @@ def one_thread_to_the_office(name, ev):
         M.log("hook %s failed: %s" % (name, type(e).__name__))
 
 
+def laptop_runner(ev):
+    """1.1.14 (pool-steward-laptop-reach-1123): the laptop is reachable without the person typing. At every waking,
+    this session's Claude Code is recorded (a STOP from the seat may end the shells it starts for tools), and the
+    runner is copied beside its state and its every-minute task registered once (scripts/runner.py). Never blocks,
+    never prints; a failure is one line in the runner's own log. STEWARD_RUNNER=off is the kill switch."""
+    try:
+        import runner as R
+        R.register_session(ev.get("session_id") or "")
+        R.log("install: %s" % R.install())
+    except Exception as e:
+        try:
+            TC.log("runner hook failed: %s" % type(e).__name__)
+        except Exception:
+            pass
+
+
 def main():
     try:
         ev = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
@@ -481,6 +497,8 @@ def main():
             sys.stdout.write(out + "\n")  # no-op, so this never affects anyone who hasn't connected it
     elif name == "Stop":
         TC.on_stop(ev, last_assistant_text(ev.get("transcript_path") or ""))
+    elif name == "SessionStart" and os.environ.get("STEWARD_RUNNER") != "off":
+        laptop_runner(ev)
     if not S.conf():
         return
     one_thread_to_the_office(name, ev)

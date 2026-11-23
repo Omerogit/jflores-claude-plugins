@@ -51,6 +51,16 @@ who forms new teammates in this house, puts your steward together from what you 
 it, choose your steward's name, and nothing goes live without your yes. From then on your Claude Code wakes as your
 steward in every new session.
 
+**Your steward can work on your laptop while you're away (1.1.14).** Once your laptop is connected to your
+steward, the plugin sets up a small Windows task that runs once a minute while you're signed in. It checks your room
+for a job your steward's server side handed to this laptop. If there is one, it runs it with no window and posts the
+answer back to your room. Only your steward's own server side can hand it a job: nothing typed on the laptop, and
+nothing a file or a web page says, can start one. Your steward can also send STOP, which ends what your steward
+itself started on this laptop and nothing else. Every job follows three standing rules: it searches only the folders
+the task needs and never all of OneDrive, it skips files that live only in the cloud, it says how big any large
+download is and checks free space first, and it clears its own temp files. To turn it off, create an empty file named
+`STOP` in `.claude\steward\runner` in your user folder.
+
 **Two sides.** What you share about yourself stays on a private side: no person at the company reads it, Omero
 included. What your steward learns about the work is shared, so everyone's builds get better. Your words in the
 interview are recorded by the plugin's own code, exactly as you type them, on your private side.
