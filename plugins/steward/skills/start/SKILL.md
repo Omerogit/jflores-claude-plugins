@@ -130,5 +130,6 @@ person, never post them anywhere else.
 - Never start this yourself. The person types it.
 - Never write their words for them, and never keep a slot without the turn it came from.
 - Never call the steward "it".
+- Never search, grep, glob or list recursively inside a OneDrive folder, or from the home folder above it: OneDrive keeps files in the cloud until they are read, so a search downloads them all and can fill the disk. Use the server's onedrive_list and onedrive_get, or ask for the one file by name (reading one named file is fine).
 - Never promise a time the welcome does not.
 - Never put their private side into a work note. When unsure, it is private.
