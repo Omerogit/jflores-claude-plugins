@@ -115,6 +115,30 @@ def onedrive_roots(env):
     return out
 
 
+PARAM_OP = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:[#%/^,@][^}]*)\}")
+
+
+def parse_assigns(seg):
+    """1.1.22: [export|local|declare|typeset|readonly [-x]] NAME=value [NAME=value ...] and nothing else -> [(name, value)], else None.
+    A value is "..." , '...' or a run of characters in which a backslash escapes the next one (so \\<space> stays in the value)."""
+    m = re.match(r"^\s*(?:(?:export|local|declare|typeset|readonly)\s+(?:-\w+\s+)*)?", seg)
+    rest, out = seg[m.end():], []
+    pat = re.compile(r"""\s*([A-Za-z_]\w*)=("[^"]*"|'[^']*'|(?:\\.|[^\s"';|&<>()])*)""")
+    pos = 0
+    while pos < len(rest.rstrip()):
+        mm = pat.match(rest, pos)
+        if not mm or mm.end() == pos:
+            return None
+        v = mm.group(2)
+        if v[:1] in "\"'" and v[-1:] == v[:1] and len(v) > 1:
+            v = v[1:-1]
+        else:
+            v = re.sub(r"\\ ", " ", v)
+        out.append((mm.group(1), v))
+        pos = mm.end()
+    return out or None
+
+
 BRACED = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-=+?])([^}]*)\}")
 
 
@@ -127,7 +151,9 @@ def braced_forms(t, env):
         if m.group(2).endswith("+"):
             return m.group(3) if v else ""
         return v if v else m.group(3)
-    return BRACED.sub(sub, t)
+    # 1.1.22: ${D%/*} ${D#x} ${D/a/b} ${D^^}: the result is judged as the variable itself (a prefix, suffix or edit of
+    # a OneDrive path is still on the way to it, or above it)
+    return BRACED.sub(sub, PARAM_OP.sub(lambda m: low.get(m.group(1).lower(), ""), t))
 
 
 def subst_vars(t, env):
@@ -290,6 +316,24 @@ def check_cmd(cmd, env, cwd, depth=0):
         toks = tokens(seg)
         if not toks:
             continue
+        seg = re.sub(r"^\s*(?:do|then|else)\s+", "", seg)      # 1.1.22: while ...; do D=<OneDrive>; grep -r x $D
+        toks = tokens(seg) or toks
+        multi = parse_assigns(seg)
+        if multi:       # 1.1.22: D=<OneDrive\ with\ escaped\ spaces>  and  D=<OneDrive> E=1  (several words, one line)
+            for nm, vv in multi:
+                env[nm] = subst_vars(vv, env)
+            continue
+        fm = re.match(r"^\s*for\s+([A-Za-z_]\w*)\s+in\s+(.*?)\s*$", seg, re.S)
+        if fm:          # 1.1.22: for d in <OneDrive> ...; do grep -r x $d; done : the loop variable holds the item that reaches OneDrive
+            items = [it.strip("\"'") for it in tokens(fm.group(2))] or [""]
+            pick = items[0]
+            for it in items:
+                it2 = subst_vars(it, env)
+                if reaches(expand(it2, env, cur), env, it2, single_ok=False):
+                    pick = it2
+                    break
+            env[fm.group(1)] = subst_vars(pick, env)
+            continue
         am = re.match(r"^\s*(?:\$(?:env:)?|set\s+(?:/[aApP]\s+)?|(?:export|local|declare|typeset|readonly)\s+(?:-\w+\s+)*|\$env:)?([A-Za-z_]\w*)\s*=\s*(.*?)\s*$", seg, re.S)
         if am and (re.fullmatch(r"\"[^\"]*\"|'[^']*'|\S*|\$\([^()]*\)|`[^`]*`", am.group(2)) or re.match(r"^\s*(\$|set\s|export\s|local\s|declare\s|typeset\s|readonly\s)", seg)):
             val = am.group(2).strip()
@@ -300,7 +344,7 @@ def check_cmd(cmd, env, cwd, depth=0):
             env[am.group(1)] = subst_vars(val.strip().strip("\"'"), env)    # 1.1.21: B=$A follows A
             continue
         i = 0
-        while i < len(toks) and (toks[i] in ("sudo", "time", "command", "nohup", "env", "&") or re.match(r"^\w+=", toks[i])):
+        while i < len(toks) and (toks[i] in ("sudo", "time", "command", "nohup", "env", "&", "do", "then", "else", "{") or re.match(r"^\w+=", toks[i])):
             i += 1
         if i >= len(toks):
             continue
