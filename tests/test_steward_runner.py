@@ -120,6 +120,9 @@ if "SLEEPY" in prompt:
     c = subprocess.Popen(["sleep", "300"])
     open(os.path.join(%r, "child"), "w").write(str(c.pid))
     c.wait()
+if "FAILJOB" in prompt:
+    print("could not: access denied")
+    sys.exit(3)
 print("did it: free space 41 GB, nothing downloaded")
 ''' % (SEEN, SEEN, SEEN, SEEN, TMP))
 os.environ.update(STEWARD_HOME=SH, STEWARD_CLAUDE=FAKE, STEWARD_RUNNER_GRACE="1", STEWARD_IGNORE_HOUSE="1")
@@ -187,13 +190,19 @@ try:
     check("01 a seat job starts on the tick", r1 == "started", r1)
     check("01 it ran headless, once", until(finished) and len(seen_runs()) == 1, seen_runs())
     RN.tick()
-    lines = R.runner_lines()
+    started = [m for m in R.runner_lines() if "Started the job from" in m["body"]]
+    check("01 the room hears the job start, once, with the STOP word and the limit", len(started) == 1
+          and "send STOP to end it" in started[0]["body"] and "up to 30 minutes" in started[0]["body"],
+          [m["body"][:100] for m in R.runner_lines()])
+    lines = [m for m in R.runner_lines() if "Started the job from" not in m["body"]]
+    check("01 a clean finish shows no exit code", len(lines) == 1 and "(exit" not in lines[0]["body"]
+          and ", done in " in lines[0]["body"], [m["body"][:100] for m in lines])
     check("01 its answer is in the room as a laptop line", len(lines) == 1 and "did it: free space 41 GB" in lines[0]["body"]
           and lines[0]["author_id"] == STEWARD, lines)
     RN.tick()
     RN.tick()
-    check("01 a job runs once and is told once", len(seen_runs()) == 1 and len(R.runner_lines()) == 1,
-          (len(seen_runs()), len(R.runner_lines())))
+    check("01 a job runs once and is told once (a start line and an answer)", len(seen_runs()) == 1
+          and len(R.runner_lines()) == 2, (len(seen_runs()), len(R.runner_lines())))
     st = json.load(open(RN.STATE))
     st["since"] = 0.0                                  # the cursor lost (a state file put back, a clock moved)
     json.dump(st, open(RN.STATE, "w"))
@@ -212,6 +221,15 @@ try:
                              "STEWARD_RUNNER_JOB": R.msgs[0]["id"]}, run.get("env"))
     check("01 headless: -p, no window to approve in", "-p" in run.get("argv", []) and "--allowedTools" in run.get("argv", []),
           run.get("argv"))
+
+    # 1a. a job that fails says its exit code
+    reset()
+    R.job("FAILJOB: read the locked file")
+    RN.tick()
+    until(finished)
+    RN.tick()
+    fl = [m["body"] for m in R.runner_lines() if ", done in " in m["body"]]
+    check("01a a failed job shows its exit code", len(fl) == 1 and " s (exit 3):" in fl[0], fl)
 
     # 1b. a job the person's own session already had in front of it is left to it
     reset()
@@ -243,9 +261,18 @@ try:
     try:
         out = RN.tick()
     except RuntimeError as e:
-        out = "refused: %s" % e
+        out = "raised: %s" % e
+    out2 = RN.tick()
     time.sleep(0.5)
-    check("03 no via_door from the door: nothing runs", out.startswith("refused") and not seen_runs(), out)
+    check("03 no via_door from the door: nothing runs", out == "door too old" == out2 and not seen_runs(), (out, out2))
+    old = [m for m in R.runner_lines() if "door is an older one" in m["body"]]
+    check("03 the room hears it once, not only the log", len(old) == 1, [m["body"][:100] for m in R.runner_lines()])
+    R.via_door_field = True
+    RN.tick()
+    R.via_door_field = False
+    RN.tick()
+    old = [m for m in R.runner_lines() if "door is an older one" in m["body"]]
+    check("03 a door that falls back again after catching up is told again", len(old) == 2, len(old))
     check("03 a line without via_door is never a job", RN.is_job({"author_id": STEWARD, "kind": "bench",
           "body": HEAD % "1" + "abc", "chars": 30}, {"steward": STEWARD}) is False)
 
@@ -302,6 +329,11 @@ try:
     RN.tick()
     time.sleep(0.5)
     check("06 the tool shell under the session (and its child) ended", shell and not alive(shell[0]), kids)
+    sl = [m["body"] for m in R.runner_lines() if "STOP from" in m["body"]]
+    check("06 the STOP line says plainly it was a shell the person's own open session started",
+          len(sl) == 1 and "ended a shell your open Claude Code session started (" in sl[0], sl)
+    check("06 a PowerShell reads as PowerShell", RN.SHELL_WORDS.get(RN.base("powershell.exe")) == "PowerShell"
+          and RN.SHELL_WORDS.get(RN.base("pwsh.exe")) == "PowerShell")
     check("06 Claude Code itself, and a shell it started with the session (an MCP server's), stay",
           alive(s.pid) and early and alive(early[0]), (kids, made))
     RN.kill_tree(s.pid, RN.procs())                 # this test's own tree, by pid: never a pattern

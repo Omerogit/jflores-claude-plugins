@@ -62,7 +62,12 @@ GRACE_S = float(os.environ.get("STEWARD_RUNNER_GRACE") or 20)                   
 LOCK_STALE_S = 10 * 60
 OUT_MAX = 5000
 SHELLS = {"bash", "sh", "dash", "zsh", "cmd", "powershell", "pwsh", "conhost"}
+SHELL_WORDS = {"powershell": "PowerShell", "pwsh": "PowerShell", "cmd": "Command Prompt", "conhost": "console window",
+               "bash": "Bash shell", "sh": "shell", "dash": "shell", "zsh": "shell"}
 TOOLS = "Bash,PowerShell,Read,Glob,Grep,Edit,Write,TodoWrite"
+
+TOO_OLD = ("Jobs from the server can't run on this laptop yet: the room's door is an older one that can't tell my "
+           "lines from this laptop's own, so nothing runs until the door is updated.")
 
 RULES = (
     "You are {steward}, {person}'s Faithful Steward, and this is your own laptop body running a job your server seat "
@@ -312,7 +317,8 @@ def stop_all(table=None):
         for c in children(rec["pid"], table):
             ppid, name, created = table[c]
             if base(name) in SHELLS and created > after:
-                ended.append(("%s under an open session" % base(name), kill_tree(c, table)))
+                ended.append(("a %s your open Claude Code session started" % SHELL_WORDS.get(base(name), base(name)),
+                              kill_tree(c, table)))
     return ended
 
 
@@ -332,6 +338,10 @@ def is_stop(text):
     return re.sub(r"[^a-z]", "", text.lower()) == "stop"
 
 
+class DoorTooOld(RuntimeError):
+    """The door does not say via_door: nothing runs (fail closed), and the room hears it once."""
+
+
 def read_new(c, st, now):
     """Every line since the cursor, paged forward (the door's full=1), so no job is skipped and none is read cut."""
     since = st.get("since")
@@ -345,7 +355,7 @@ def read_new(c, st, now):
             raise RuntimeError("GET HTTP %d" % code)
         lines = out.get("lines") or []
         if lines and "via_door" not in lines[0]:
-            raise RuntimeError("the door is too old to tell the seat's lines from its own; nothing runs")
+            raise DoorTooOld("the door is too old to tell the seat's lines from its own; nothing runs")
         got.extend(lines)
         if lines:
             since = lines[-1]["ts"]
@@ -387,7 +397,19 @@ def tick(now=None):
         return "busy"
     try:
         os.close(fd)
-        return _tick(c, now or time.time())
+        try:
+            out = _tick(c, now or time.time())
+        except DoorTooOld:
+            st = load(STATE, {})
+            if not st.get("told_old") and tell(c, "runner-door-too-old-%d" % int(time.time() * 1000), TOO_OLD):
+                st["told_old"] = True
+                save(STATE, st)
+            log("door too old: nothing runs")
+            return "door too old"
+        st = load(STATE, {})
+        if st.pop("told_old", None):                 # the door caught up: a later fall-back is told again
+            save(STATE, st)
+        return out
     finally:
         try:
             os.remove(LOCK)
@@ -465,6 +487,8 @@ def _tick(c, now):
     save(os.path.join(JOBS, "%s.job.json" % j["mid"]), j)
     spawn("run", j["mid"])
     log("job %s started" % j["mid"])
+    tell(c, "runner-start-%s" % j["mid"], "Started the job from %s. It can run up to %d minutes; send STOP to end it."
+         % (hhmm(j["ts"]), JOB_TIMEOUT // 60))
     return "started"
 
 
@@ -485,7 +509,8 @@ def report(c, st):
         elif d.get("error"):
             head = "The job from %s could not start: %s" % (hhmm(d.get("job_ts")), d["error"])
         else:
-            head = "The job from %s, done in %d s (exit %s):" % (hhmm(d.get("job_ts")), d.get("secs") or 0, d.get("rc"))
+            head = "The job from %s, done in %d s%s:" % (hhmm(d.get("job_ts")), d.get("secs") or 0,
+                                                          "" if d.get("rc") == 0 else " (exit %s)" % d.get("rc"))
         body = (d.get("out") or "").strip()
         if tell(c, "runner-%s" % mid, head + ("\n\n" + body if body else "")):
             os.replace(path, path[:-len(".done.json")] + ".told.json")

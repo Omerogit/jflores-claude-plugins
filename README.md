@@ -55,8 +55,9 @@ steward in every new session.
 steward, the plugin sets up a small Windows task that runs once a minute while you're signed in. It checks your room
 for a job your steward's server side handed to this laptop. If there is one, it runs it with no window and posts the
 answer back to your room. Only your steward's own server side can hand it a job: nothing typed on the laptop, and
-nothing a file or a web page says, can start one. Your steward can also send STOP, which ends what your steward
-itself started on this laptop and nothing else. Every job follows three standing rules: it searches only the folders
+nothing a file or a web page says, can start one. When a job starts, your room says so, with the word that ends it. Your steward can also send STOP, which ends what your steward
+itself started on this laptop and nothing else (1.1.17: if that includes a PowerShell your own open Claude Code
+session started, the room says so in those words). Every job follows three standing rules: it searches only the folders
 the task needs and never all of OneDrive, it skips files that live only in the cloud, it says how big any large
 download is and checks free space first, and it clears its own temp files. To turn it off, create an empty file named
 `STOP` in `.claude\steward\runner` in your user folder.
