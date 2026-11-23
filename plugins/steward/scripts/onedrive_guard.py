@@ -191,6 +191,14 @@ def reaches(p, env, tok="", single_ok=True):
         return None
     if inside_onedrive(p, env) or above_onedrive(p, env) or wild_descends(p, env):
         return p
+    # 1.1.20: a symlink or junction that leads into OneDrive (ln -s <OneDrive> /tmp/lnk; find /tmp/lnk/)
+    try:
+        lit = re.split(r"[*?\[{]", p, 1)[0].rstrip("/") or "/"
+        rp = norm(os.path.realpath(lit))
+        if rp.lower() != norm(lit).lower() and (inside_onedrive(rp, env) or above_onedrive(rp, env)):
+            return p
+    except (OSError, ValueError):
+        pass
     return None
 
 
@@ -276,6 +284,63 @@ def check_cmd(cmd, env, cwd, depth=0):
                     hit = check_cmd(a[1:-1], env, cur, depth + 1)
                     if hit:
                         return hit
+        if base == "xargs" and depth < 4:
+            # 1.1.20: xargs -a /dev/null find ~ : the command xargs runs is judged as if typed
+            rest, j = [], 0
+            while j < len(args):
+                a = args[j]
+                if a in ("-a", "-I", "-n", "-P", "-d", "-E", "-L", "-s", "-l", "-i"):
+                    j += 2
+                    continue
+                if a.startswith("-") and not rest:
+                    j += 1
+                    continue
+                rest.append(a)
+                j += 1
+            if rest:
+                hit = check_cmd(" ".join(rest), env, cur, depth + 1)
+                if hit:
+                    return hit
+        if base == "git":
+            # 1.1.20: git -C ~/OneDrive* grep x reads the whole working tree; so does git grep run from inside OneDrive
+            g, sub, j, wt = cur, None, 0, None
+            while j < len(args):
+                a = args[j]
+                if a == "-C" and j + 1 < len(args):
+                    g = expand(args[j + 1], env, g) or g
+                    j += 2
+                    continue
+                # 1.1.20 (Nathan, Shallum): -c k=v and the separate-value forms take a value that is never the subcommand;
+                # --git-dir / --work-tree name the tree git reads, so they move the root like -C
+                m2 = re.match(r"^--(git-dir|work-tree)=(.*)$", a)
+                if m2 or a in ("--git-dir", "--work-tree"):
+                    v = m2.group(2) if m2 else (args[j + 1] if j + 1 < len(args) else "")
+                    if m2 is None or (not v and j + 1 < len(args)):      # the tokenizer splits --git-dir='path' at the quote
+                        v = args[j + 1] if j + 1 < len(args) else ""
+                        j += 1
+                    v = v.strip("\"'")
+                    if v:
+                        e2 = expand(v, env, g)
+                        if e2 and e2.rstrip("/").lower().endswith("/.git"):
+                            e2 = e2.rstrip("/")[:-5] or "/"
+                        if e2 and reaches(e2, env, "", single_ok=False):
+                            wt = e2
+                    j += 1
+                    continue
+                if a in ("-c", "--namespace", "--exec-path", "--super-prefix", "--config-env"):
+                    j += 2
+                    continue
+                if a.startswith("-"):
+                    j += 1
+                    continue
+                sub = a.lower()
+                break
+            if sub in ("grep", "ls-files", "archive", "bundle"):
+                if wt:
+                    return wt
+                if reaches(g, env, "", single_ok=False):
+                    return g
+            continue
         if base == "xargs" and k > 0:
             # 1.1.16: ls | xargs grep reads every file the left side names
             rest = [a for a in args if not a.startswith("-")]

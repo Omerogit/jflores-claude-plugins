@@ -512,8 +512,10 @@ def report(c, st):
         elif d.get("error"):
             head = "The job from %s could not start: %s" % (hhmm(d.get("job_ts")), d["error"])
         elif d.get("rc") != 0:
-            head = "The job from %s stopped with an error after %d s (exit %s):" % (hhmm(d.get("job_ts")),
-                                                                                    d.get("secs") or 0, d.get("rc"))
+            # 1.1.20: a result with no exit code (never "done") says so, not "exit None"; a negative code is a signal kill
+            rc = d.get("rc")
+            head = "The job from %s stopped with an error after %d s (%s):" % (
+                hhmm(d.get("job_ts")), d.get("secs") or 0, "no exit code was recorded" if rc is None else "exit %s" % rc)
         else:
             head = "The job from %s, done in %d s:" % (hhmm(d.get("job_ts")), d.get("secs") or 0)
         body = (d.get("out") or "").strip()

@@ -235,6 +235,19 @@ try:
     check("01a a failed job says it stopped with an error, with its exit code, never 'done'", len(fl) == 1
           and "stopped with an error after " in fl[0] and " s (exit 3):" in fl[0] and "done in" not in fl[0], fl)
 
+    # 1a'. Nathan, 1.1.18 round: a result with no exit code, and a negative one (killed by a signal), are never "done"
+    for label, extra, want in (("no rc", {}, "no exit code was recorded"), ("rc -9", {"rc": -9}, "(exit -9):"),
+                               ("rc 0 control", {"rc": 0}, "done in")):
+        reset()
+        os.makedirs(RN.JOBS, exist_ok=True)
+        d = {"mid": "m%d" % len(label), "job_ts": time.time() - 30, "secs": 5, "out": "x"}
+        d.update(extra)
+        json.dump(d, open(os.path.join(RN.JOBS, "%s.done.json" % d["mid"]), "w"))
+        RN.tick()
+        fl = [m["body"] for m in R.runner_lines() if "The job from" in m["body"]]
+        ok = len(fl) == 1 and want in fl[0] and (("done in" in fl[0]) == (label == "rc 0 control")) and "None" not in fl[0]
+        check("01a' a done file with %s reads right" % label, ok, fl)
+
     # 1b. a job the person's own session already had in front of it is left to it
     reset()
     R.job("clean the disk", ts=time.time() - 60)

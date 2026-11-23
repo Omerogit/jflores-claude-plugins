@@ -1,6 +1,6 @@
 {
   "name": "steward",
-  "version": "1.1.19",
+  "version": "1.1.20",
   "description": "Meet your Faithful Steward: a teammate who works beside you, and only you, as a partner in your work, formed in the J Flores Brain from your own interview. Type /steward:start when you are ready. Your steward's private notes about you stay on a private side. Monday and others with access to your help room can read what you type to your steward and what your steward answers; say \"off the record\" to pause that, and don't type passwords, keys or card details.",
   "author": {
     "name": "J Flores Company"

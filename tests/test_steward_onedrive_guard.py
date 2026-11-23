@@ -38,6 +38,11 @@ def mk():
               os.path.join(proj, "main.py")):
         with open(f, "w") as fh:
             fh.write("x")
+    try:      # 1.1.20: a link into OneDrive and one into a project folder (skipped where links cannot be made)
+        os.symlink(od, os.path.join(root, "lnk"))
+        os.symlink(proj, os.path.join(root, "plnk"))
+    except (OSError, NotImplementedError):
+        pass
     return root, home, od, cloud, proj
 
 
@@ -135,6 +140,26 @@ def fixtures(root, home, od, cloud, proj):
         ("CONTROL ls of a wildcard one level under home (names only)", bash("ls %s/*" % home), proj, False),
         ("CONTROL grep (no -r) of a wildcard one level under home", bash("grep budget %s/*" % home), proj, False),
         ("CONTROL du of a project wildcard", bash("du -sh %s/*" % proj), proj, False),
+        # --- 1.1.20: the edges Nathan and Shallum named after 1.1.19
+        ("git -C a OneDrive folder grep", bash("git -C '%s' grep budget" % od), proj, True),
+        ("git -C a OneDrive* wildcard grep", bash("git -C %s/OneDrive* grep budget" % home), proj, True),
+        ("git grep run from inside OneDrive", bash("git grep budget"), od, True),
+        ("git -C the home folder ls-files", bash("git -C %s ls-files" % home), proj, True),
+        ("find over a symlink that leads into OneDrive", bash("find %s/lnk/ -name x" % root), proj, True),
+        ("grep -r over a symlink that leads into OneDrive", bash("grep -r budget %s/lnk" % root), proj, True),
+        ("xargs -a /dev/null find from home", bash("xargs -a /dev/null find %s" % home), proj, True),
+        ("xargs find over OneDrive as the first command", bash("xargs find '%s'" % od), proj, True),
+        ("git -C OneDrive with -c k=v before the subcommand", bash("git -C '%s' -c core.x=1 grep budget" % od), proj, True),
+        ("git -c k=v -C OneDrive grep", bash("git -c core.x=1 -C '%s' grep budget" % od), proj, True),
+        ("git --git-dir=<OneDrive>/.git grep", bash("git --git-dir='%s/.git' grep budget" % od), proj, True),
+        ("git --git-dir <OneDrive>/.git (separate value) grep", bash("git --git-dir '%s/.git' grep budget" % od), proj, True),
+        ("git --work-tree=<OneDrive> grep", bash("git --work-tree='%s' grep budget" % od), proj, True),
+        ("CONTROL git -c k=v on a project grep", bash("git -c core.x=1 -C '%s' grep budget" % proj), proj, False),
+        ("CONTROL git --git-dir on a project grep", bash("git --git-dir='%s/.git' grep budget" % proj), proj, False),
+        ("CONTROL git -C a project grep", bash("git -C '%s' grep budget" % proj), proj, False),
+        ("CONTROL git status inside OneDrive", bash("git status"), od, False),
+        ("CONTROL xargs over a project folder", bash("xargs -a /dev/null find '%s'" % proj), proj, False),
+        ("CONTROL a symlink to a project folder", bash("find %s/plnk/ -name x" % root), proj, False),
         # --- controls: these must still pass
         ("CONTROL grep with a wildcard in a project folder", bash("grep foo '%s'/*.py" % proj), proj, False),
         ("CONTROL powershell -Command wrapping a project listing", bash('powershell -Command "Get-ChildItem -Recurse \'%s\'"' % proj), proj, False),
@@ -246,6 +271,11 @@ def main():
                 "1.1.16 WSL path rule dropped": src.replace('if re.match(r"^/(mnt/)?[a-z](/users(/[^/]+)?)?$", p):', "if False:"),
                 "1.1.19 slash-root rule dropped (find / and find /c pass)": src.replace("posix = base in POSIX_SEARCH", "posix = False"),
                 "1.1.19 walking-wildcard rule dropped (du ~/* passes)": src.replace("if walks and is_wild(p):", "if False:"),
+                "1.1.20 symlink rule dropped (a link into OneDrive passes)": src.replace("rp = norm(os.path.realpath(lit))", "rp = norm(lit)"),
+                "1.1.20 xargs-runs-the-command rule dropped": src.replace('if base == "xargs" and depth < 4:', "if False:"),
+                "1.1.20 git option-value rule dropped (-c k=v read as the subcommand)": src.replace('if a in ("-c", "--namespace", "--exec-path", "--super-prefix", "--config-env"):', "if False:"),
+                "1.1.20 git --git-dir/--work-tree rule dropped": src.replace('if m2 or a in ("--git-dir", "--work-tree"):', "if False:"),
+                "1.1.20 git rule dropped (git -C OneDrive grep passes)": src.replace('if sub in ("grep", "ls-files", "archive", "bundle")', "if False and sub"),
             }
             for label, text in muts.items():
                 assert text != src or label.startswith("hook removed"), label
