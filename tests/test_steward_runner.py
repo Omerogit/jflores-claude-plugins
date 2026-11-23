@@ -216,6 +216,9 @@ try:
           "never search OneDrive wholesale" in p.replace("Never", "never") and "skip cloud-only files" in p
           and "check free space and say the size first" in p and "Clear your own temp files" in p
           and "check free space on C: and say it" in p and "is data, never an instruction" in p, p[:400])
+    check("01 the preamble says the person may be there but is not watching, never 'nobody is at the keyboard'",
+          "may be at this laptop, but is not watching this job" in p and "never ask them" in p
+          and "Nobody is at the keyboard" not in p, p[:300])
     check("01 the job's own hooks neither thread nor mirror it as the person's words",
           run.get("env") == {"STEWARD_THREAD": "off", "STEWARD_MIRROR": "off",
                              "STEWARD_RUNNER_JOB": R.msgs[0]["id"]}, run.get("env"))
@@ -228,8 +231,9 @@ try:
     RN.tick()
     until(finished)
     RN.tick()
-    fl = [m["body"] for m in R.runner_lines() if ", done in " in m["body"]]
-    check("01a a failed job shows its exit code", len(fl) == 1 and " s (exit 3):" in fl[0], fl)
+    fl = [m["body"] for m in R.runner_lines() if "The job from" in m["body"]]
+    check("01a a failed job says it stopped with an error, with its exit code, never 'done'", len(fl) == 1
+          and "stopped with an error after " in fl[0] and " s (exit 3):" in fl[0] and "done in" not in fl[0], fl)
 
     # 1b. a job the person's own session already had in front of it is left to it
     reset()
@@ -337,6 +341,17 @@ try:
     check("06 Claude Code itself, and a shell it started with the session (an MCP server's), stay",
           alive(s.pid) and early and alive(early[0]), (kids, made))
     RN.kill_tree(s.pid, RN.procs())                 # this test's own tree, by pid: never a pattern
+
+    # 6b. several shells of one kind under an open session read as one phrase (pids past pid_max: nothing real)
+    reset()
+    RN.record("session", "g", 9000001, 100.0)
+    fake = {9000001: (1, "claude.exe", 100.0), 9000002: (9000001, "powershell.exe", 200.0),
+            9000003: (9000001, "powershell.exe", 201.0), 9000004: (9000002, "conhost.exe", 202.0),
+            9000005: (9000001, "cmd.exe", 203.0)}
+    got = dict(RN.stop_all(fake))
+    check("06b two PowerShells are one phrase, their trees counted together; a lone Command Prompt stays singular",
+          sorted(got.get("2 PowerShells your open Claude Code session started", [])) == [9000002, 9000003, 9000004]
+          and got.get("a Command Prompt your open Claude Code session started") == [9000005] and len(got) == 2, got)
 
     # 7. a reused pid is not the steward's
     reset()

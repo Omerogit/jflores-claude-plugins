@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""THE LAPTOP RUNNER (steward 1.1.14, pool-steward-laptop-reach-1123): a steward's laptop body is reachable from the
+"""THE LAPTOP RUNNER (steward 1.1.14; room wording 1.1.17-1.1.18, pool-steward-laptop-reach-1123): a steward's laptop body is reachable from the
 server without the person typing first.
 
 Why: on 2026-11-22 a search Samuel's laptop body started over Omar's user folder pulled cloud-only OneDrive files
@@ -71,7 +71,8 @@ TOO_OLD = ("Jobs from the server can't run on this laptop yet: the room's door i
 
 RULES = (
     "You are {steward}, {person}'s Faithful Steward, and this is your own laptop body running a job your server seat "
-    "handed it. Nobody is at the keyboard: {person} is not watching and must not be asked to do anything. Do the job "
+    "handed it. {person} may be at this laptop, but is not watching this job and cannot answer it: never ask them to "
+    "do anything. Do the job "
     "with your own tools, then answer in a few plain lines with what you did and what you read back to check it. "
     "That answer is posted to your shared room as it is.\n\n"
     "Standing rules on this laptop, every job:\n"
@@ -299,7 +300,7 @@ def register_session(sid, table=None):
 def stop_all(table=None):
     """THE STOP VERB. Returns [(what, [pids])]."""
     table = table if table is not None else procs()
-    ended = []
+    ended, shells = [], {}
     for path, rec in records():
         if not same(rec, table):
             try:
@@ -317,8 +318,10 @@ def stop_all(table=None):
         for c in children(rec["pid"], table):
             ppid, name, created = table[c]
             if base(name) in SHELLS and created > after:
-                ended.append(("a %s your open Claude Code session started" % SHELL_WORDS.get(base(name), base(name)),
-                              kill_tree(c, table)))
+                shells.setdefault(SHELL_WORDS.get(base(name), base(name)), []).append(kill_tree(c, table))
+    for word, trees in shells.items():         # one phrase per kind: "2 PowerShells your open ... started"
+        ended.append((("a %s" % word if len(trees) == 1 else "%d %ss" % (len(trees), word))
+                      + " your open Claude Code session started", [p for t in trees for p in t]))
     return ended
 
 
@@ -508,9 +511,11 @@ def report(c, st):
             head = "The job from %s ran past %d minutes and was ended." % (hhmm(d.get("job_ts")), JOB_TIMEOUT // 60)
         elif d.get("error"):
             head = "The job from %s could not start: %s" % (hhmm(d.get("job_ts")), d["error"])
+        elif d.get("rc") != 0:
+            head = "The job from %s stopped with an error after %d s (exit %s):" % (hhmm(d.get("job_ts")),
+                                                                                    d.get("secs") or 0, d.get("rc"))
         else:
-            head = "The job from %s, done in %d s%s:" % (hhmm(d.get("job_ts")), d.get("secs") or 0,
-                                                          "" if d.get("rc") == 0 else " (exit %s)" % d.get("rc"))
+            head = "The job from %s, done in %d s:" % (hhmm(d.get("job_ts")), d.get("secs") or 0)
         body = (d.get("out") or "").strip()
         if tell(c, "runner-%s" % mid, head + ("\n\n" + body if body else "")):
             os.replace(path, path[:-len(".done.json")] + ".told.json")
