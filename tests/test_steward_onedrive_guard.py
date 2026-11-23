@@ -69,6 +69,12 @@ def ps(c):
     return {"tool_name": "PowerShell", "tool_input": {"command": c}}
 
 
+def nest(inner, n):
+    for _ in range(n):
+        inner = 'bash -c "%s"' % inner.replace("\\", "\\\\").replace('"', '\\"')
+    return inner
+
+
 def fixtures(root, home, od, cloud, proj):
     """(label, event, cwd, must_refuse). Paths use forward slashes where a shell would; the guard folds both."""
     docs = od + "/Docs"
@@ -160,6 +166,48 @@ def fixtures(root, home, od, cloud, proj):
         ("CONTROL git status inside OneDrive", bash("git status"), od, False),
         ("CONTROL xargs over a project folder", bash("xargs -a /dev/null find '%s'" % proj), proj, False),
         ("CONTROL a symlink to a project folder", bash("find %s/plnk/ -name x" % root), proj, False),
+        # --- 1.1.21: the five shapes found after 1.1.20 (unquoted wrapper args, copytree, deep nesting, a variable holding the path)
+        ("cmd /c dir /s of home, unquoted", bash("cmd /c dir /s %s" % home), proj, True),
+        ("cmd /c findstr /s over home wildcard, unquoted", bash("cmd /c findstr /s budget %s\\*" % home), proj, True),
+        ("wsl grep -r over /mnt/c/Users/omar, unquoted", bash("wsl grep -r budget /mnt/c/Users/omar"), proj, True),
+        ("wsl -d Ubuntu grep -r, unquoted", bash("wsl -d Ubuntu grep -r budget /mnt/c/Users/omar"), proj, True),
+        ("python -c shutil.copytree of OneDrive", bash("python -c \"import shutil; shutil.copytree('%s','D:/x')\"" % od), proj, True),
+        ("bash -c nested ten deep around a home search", bash(nest("grep -r budget %s" % home, 10)), proj, True),
+        ("a variable holding OneDrive, then grep -r \"$D\"", bash("D='%s'; grep -r budget \"$D\"" % od), proj, True),
+        ("a PowerShell variable holding home, then Get-ChildItem -Recurse", ps("$D = '%s'; Get-ChildItem -Recurse $D" % home), proj, True),
+        ("CONTROL cmd /c dir of one project folder", bash("cmd /c dir %s" % proj), proj, False),
+        ("CONTROL wsl ls of a project folder", bash("wsl ls %s" % proj), proj, False),
+        ("CONTROL wsl grep of one named OneDrive file", bash("wsl grep budget '%s/notes.txt'" % od), proj, False),
+        ("CONTROL nested ten deep around a project grep", bash(nest("grep -r budget %s" % proj, 10)), proj, False),
+        ("CONTROL a variable holding a project folder", bash("D='%s'; grep -r budget \"$D\"" % proj), proj, False),
+        ("CONTROL shutil.copytree of a project folder", bash("python -c \"import shutil; shutil.copytree('%s','/tmp/y')\"" % proj), proj, False),
+        ("a braced variable holding OneDrive, grep -r ${D}", bash("D='%s'; grep -r budget ${D}" % od), proj, True),
+        ("B=$A after A=<OneDrive>, grep -r $B", bash("A='%s'; B=$A; grep -r budget $B" % od), proj, True),
+        ("B=${A} after A=home, find $B", bash("A='%s'; B=${A}; find $B -name x" % home), proj, True),
+        ("wsl --cd <OneDrive> grep -r .", bash("wsl --cd '%s' grep -r budget ." % od), proj, True),
+        ("wsl --cd=<home> grep -r .", bash("wsl --cd=%s grep -r budget ." % home), proj, True),
+        ("a variable inside a wrapper's escaped quotes", bash('D=\'%s\'; bash -c "grep -r budget \\"$D\\""' % od), proj, True),
+        ("B=$(echo $A) after A=<OneDrive>, grep -r $B", bash("A='%s'; B=$(echo $A); grep -r budget $B" % od), proj, True),
+        ("B=`echo home` then find $B", bash("B=`echo %s`; find $B -name x" % home), proj, True),
+        ("wsl --cd=\"<OneDrive>\" grep -r .", bash('wsl --cd="%s" grep -r budget .' % od), proj, True),
+        ("wsl --cd='<OneDrive>' grep -r .", bash("wsl --cd='%s' grep -r budget ." % od), proj, True),
+        ("wsl \"--cd=<OneDrive>\" grep -r .", bash('wsl "--cd=%s" grep -r budget .' % od), proj, True),
+        ("${D:-default} with D holding OneDrive", bash("D='%s'; grep -r budget ${D:-/tmp}" % od), proj, True),
+        ("${U:-<OneDrive>} default naming OneDrive", bash("grep -r budget ${U:-'%s'}" % od), proj, True),
+        ("local D=<OneDrive>; grep -r $D", bash("local D='%s'; grep -r budget $D" % od), proj, True),
+        ("declare -x D=<OneDrive>; grep -r $D", bash("declare -x D='%s'; grep -r budget $D" % od), proj, True),
+        ("D=$(echo <OneDrive>); grep -r $D", bash("D=$(echo '%s'); grep -r budget $D" % od), proj, True),
+        ("a variable inside a double-quoted os.walk one-liner", bash("D='%s'; python3 -c \"import os;os.walk('$D')\"" % od), proj, True),
+        ("a braced variable inside a double-quoted os.walk one-liner", bash("D='%s'; python3 -c \"import os;os.walk('${D}')\"" % od), proj, True),
+        ("CONTROL wsl --cd=\"<project>\" grep -r .", bash('wsl --cd="%s" grep -r budget .' % proj), proj, False),
+        ("CONTROL ${D:-default} on a project", bash("D='%s'; grep -r budget ${D:-%s}" % (proj, proj)), proj, False),
+        ("CONTROL local D=<project>", bash("local D='%s'; grep -r budget $D" % proj), proj, False),
+        ("CONTROL D=$(echo <project>)", bash("D=$(echo '%s'); grep -r budget $D" % proj), proj, False),
+        ("CONTROL a variable inside an os.walk one-liner on a project", bash("D='%s'; python3 -c \"import os;os.walk('$D')\"" % proj), proj, False),
+        ("CONTROL B=$(echo $A) after A=<project>", bash("A='%s'; B=$(echo $A); grep -r budget $B" % proj), proj, False),
+        ("CONTROL B=$A after A=<project>", bash("A='%s'; B=$A; grep -r budget $B" % proj), proj, False),
+        ("CONTROL wsl --cd <project> grep -r .", bash("wsl --cd '%s' grep -r budget ." % proj), proj, False),
+        ("CONTROL a braced variable holding a project", bash("D='%s'; grep -r budget ${D}" % proj), proj, False),
         # --- controls: these must still pass
         ("CONTROL grep with a wildcard in a project folder", bash("grep foo '%s'/*.py" % proj), proj, False),
         ("CONTROL powershell -Command wrapping a project listing", bash('powershell -Command "Get-ChildItem -Recurse \'%s\'"' % proj), proj, False),
@@ -263,7 +311,7 @@ def main():
                 "the name rule dropped (no folder is a OneDrive folder by its name)":
                     src.replace('if any(seg.startswith("onedrive") for seg in p.split("/")):', "if False:"),
                 "1.1.16 wildcard-grep rule dropped": src.replace("or any(is_wild(p) for p in paths)      #", "or False      #"),
-                "1.1.16 wrapper rule dropped (powershell/bash -c not unwrapped)": src.replace("if base in WRAPPERS and depth < 4:", "if False:"),
+                "1.1.16 wrapper rule dropped (powershell/bash -c not unwrapped)": src.replace("if base in WRAPPERS:", "if False:"),
                 "1.1.16 copy rule dropped (cp/rsync/robocopy pass)": src.replace("elif base in COPY_ALWAYS:", "elif False:").replace("elif base in COPY_FLAGGED:", "elif False:"),
                 "1.1.16 $(...) rule dropped": src.replace("    if depth < 4:\n        # 1.1.16: a search inside", "    if False:\n        # 1.1.16: a search inside"),
                 "1.1.16 xargs rule dropped": src.replace('if base == "xargs" and k > 0:', "if False:"),
@@ -272,10 +320,22 @@ def main():
                 "1.1.19 slash-root rule dropped (find / and find /c pass)": src.replace("posix = base in POSIX_SEARCH", "posix = False"),
                 "1.1.19 walking-wildcard rule dropped (du ~/* passes)": src.replace("if walks and is_wild(p):", "if False:"),
                 "1.1.20 symlink rule dropped (a link into OneDrive passes)": src.replace("rp = norm(os.path.realpath(lit))", "rp = norm(lit)"),
-                "1.1.20 xargs-runs-the-command rule dropped": src.replace('if base == "xargs" and depth < 4:', "if False:"),
+                "1.1.20 xargs-runs-the-command rule dropped": src.replace('if base == "xargs" and depth < 8:', "if False:"),
                 "1.1.20 git option-value rule dropped (-c k=v read as the subcommand)": src.replace('if a in ("-c", "--namespace", "--exec-path", "--super-prefix", "--config-env"):', "if False:"),
                 "1.1.20 git --git-dir/--work-tree rule dropped": src.replace('if m2 or a in ("--git-dir", "--work-tree"):', "if False:"),
                 "1.1.20 git rule dropped (git -C OneDrive grep passes)": src.replace('if sub in ("grep", "ls-files", "archive", "bundle")', "if False and sub"),
+                "1.1.21 unquoted-wrapper rule dropped (cmd /c and wsl pass)": src.replace("            if rest and not (len(rest) == 1", "            if False and rest and not (len(rest) == 1"),
+                "1.1.21 copytree rule dropped (a copytree one-liner passes)": src.replace("|copytree|make_archive|shutil\\.move|distutils\\.dir_util|listdir", ""),
+                "1.1.21 nesting cap fails open again (past 8 wrappers passes)": src.replace('return "nested wrappers deeper than 8 levels"', "pass"),
+                "1.1.21 nesting unescape dropped (escaped inner quotes unread)": src.replace("re.sub(r'\\\\([\"\\\\])', r\"\\1\", q) if", "q if False else q if"),
+                "1.1.21 variable rule dropped (D=<OneDrive>; grep -r $D passes)": src.replace("env[am.group(1)] =", "_unused ="),
+                "1.1.21 variable-from-variable rule dropped (B=$A not followed)": src.replace("= subst_vars(val.strip()", "= (lambda v, e: v)(val.strip()"),
+                "1.1.21 command-substitution value rule dropped (B=$(echo $A) not followed)": src.replace("            if cm:      #", "            if False:      #"),
+                "1.1.21 r5 quoted --cd= rule dropped (--cd=\"<OneDrive>\" passes)": src.replace('aa = a.strip("\\"\'").lower()', "aa = a.lower()"),
+                "1.1.21 r5 ${D:-x} rule dropped (default-value forms unread)": src.replace("    t = braced_forms(t, env)\n", "").replace('t = braced_forms(tok.strip().strip("\\"\'"), env)', 'tok.strip().strip("\\"\'")' if False else 't = tok.strip().strip("\\"\'")'),
+                "1.1.21 r5 local/declare rule dropped (local D=<OneDrive> passes)": src.replace("(?:export|local|declare|typeset|readonly)", "(?:export)"),
+                "1.1.21 r5 one-liner variable rule dropped ($D inside os.walk('$D') unread)": src.replace('|\\$\\{?[A-Za-z_]\\w*\\}?[^\\s"\']*', ""),
+                "1.1.21 wsl --cd rule dropped (--cd <OneDrive> not judged)": src.replace('if aa in ("--cd", "--cd=") and jj + 1 < len(args):', "if False:").replace('elif aa.startswith("--cd="):', "elif False:"),
             }
             for label, text in muts.items():
                 assert text != src or label.startswith("hook removed"), label

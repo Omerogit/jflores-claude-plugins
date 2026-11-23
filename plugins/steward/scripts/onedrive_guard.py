@@ -68,7 +68,7 @@ def split_commands(cmd):
     return out
 
 
-RECURSE_MARK = re.compile(r"os\.walk|rglob|glob\.glob|scandir|-recurse|\*\*", re.I)
+RECURSE_MARK = re.compile(r"os\.walk|rglob|glob\.glob|scandir|-recurse|\*\*|copytree|make_archive|shutil\.move|distutils\.dir_util|listdir", re.I)
 
 
 # ----------------------------------------------------------------------------- paths
@@ -115,10 +115,37 @@ def onedrive_roots(env):
     return out
 
 
+BRACED = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:?[-=+?])([^}]*)\}")
+
+
+def braced_forms(t, env):
+    """1.1.21 r5: ${D:-x} ${D-x} ${D:=x} ${D:+x} ${D:?x}: the value the shell would use, so the path inside is judged."""
+    low = {k.lower(): v for k, v in env.items()}
+
+    def sub(m):
+        v = low.get(m.group(1).lower(), "")
+        if m.group(2).endswith("+"):
+            return m.group(3) if v else ""
+        return v if v else m.group(3)
+    return BRACED.sub(sub, t)
+
+
+def subst_vars(t, env):
+    """1.1.21: $VAR, ${VAR}, %VAR%, $env:VAR in t replaced by what is set (an unset OneDrive-named one stays 'onedrive')."""
+    t = braced_forms(t, env)
+    low = {k.lower(): v for k, v in env.items()}
+
+    def sub(m):
+        name = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+        return low.get(name.lower(), "onedrive" if "onedrive" in name.lower() else "")
+    return re.sub(r"%([A-Za-z_][A-Za-z0-9_]*)%|\$env:([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|"
+                  r"\$([A-Za-z_][A-Za-z0-9_]*)", sub, t)
+
+
 def expand(tok, env, cwd):
     """A path token as written -> normalised absolute path. Understands ~, %VAR%, $VAR, ${VAR}, $env:VAR. A variable
     that is not set but whose name says OneDrive stays in the path as 'onedrive' (so it still counts)."""
-    t = tok.strip().strip("\"'")
+    t = braced_forms(tok.strip().strip("\"'"), env)
     low = {k.lower(): v for k, v in env.items()}
 
     def sub(m):
@@ -250,6 +277,7 @@ def check_shell(ev, env, cwd, depth=0):
 def check_cmd(cmd, env, cwd, depth=0):
     cur = cwd
     mentions = None
+    env = dict(env)     # 1.1.21: D=<OneDrive>; grep -r x "$D" : an assignment earlier in the line is a path later in it
     if depth < 4:
         # 1.1.16: a search inside $(...) or backticks runs too, so judge what is inside it
         for m in SUBST.finditer(cmd):
@@ -261,6 +289,15 @@ def check_cmd(cmd, env, cwd, depth=0):
     for k, seg in enumerate(segs):
         toks = tokens(seg)
         if not toks:
+            continue
+        am = re.match(r"^\s*(?:\$(?:env:)?|set\s+(?:/[aApP]\s+)?|(?:export|local|declare|typeset|readonly)\s+(?:-\w+\s+)*|\$env:)?([A-Za-z_]\w*)\s*=\s*(.*?)\s*$", seg, re.S)
+        if am and (re.fullmatch(r"\"[^\"]*\"|'[^']*'|\S*|\$\([^()]*\)|`[^`]*`", am.group(2)) or re.match(r"^\s*(\$|set\s|export\s|local\s|declare\s|typeset\s|readonly\s)", seg)):
+            val = am.group(2).strip()
+            cm = re.fullmatch(r"\$\(([^()]*)\)|`([^`]*)`", val.strip("\"'"))
+            if cm:      # 1.1.21: B=$(echo $A) / B=`echo ~/x`: the last word of the inner command is the value (echo, printf, cat-like)
+                it = tokens(cm.group(1) or cm.group(2) or "")
+                val = it[-1] if it else ""
+            env[am.group(1)] = subst_vars(val.strip().strip("\"'"), env)    # 1.1.21: B=$A follows A
             continue
         i = 0
         while i < len(toks) and (toks[i] in ("sudo", "time", "command", "nohup", "env", "&") or re.match(r"^\w+=", toks[i])):
@@ -277,14 +314,52 @@ def check_cmd(cmd, env, cwd, depth=0):
                 if np_:
                     cur = np_
             continue
-        if base in WRAPPERS and depth < 4:
+        if base in WRAPPERS:
             # 1.1.16: powershell -Command "..." / bash -c "..." / wsl ...: judge the command inside the quotes
+            # 1.1.21: ... and the same unquoted (cmd /c dir /s C:\Users\x ; wsl grep -r x /mnt/c/Users/x), with the
+            # wrapper's own flags skipped; and past the nesting cap the call is refused when it still reads as a walk
+            inner_cmds = []
             for a in args:
-                if len(a) > 2 and a[0] in "\"'" and a[-1] == a[0]:
-                    hit = check_cmd(a[1:-1], env, cur, depth + 1)
+                if len(a) > 2 and a[0] in "\"'" and a[-1] == a[0] and not a[1:].lower().startswith("--cd="):
+                    q = a[1:-1]
+                    inner_cmds.append(re.sub(r'\\(["\\])', r"\1", q) if "\\" in q and base != "cmd" else q)
+            if base == "wsl":
+                for jj, a in enumerate(args):
+                    aa = a.strip("\"'").lower()      # 1.1.21 r5: --cd="<path>", --cd='<path>' and "--cd=<path>"
+                    if aa in ("--cd", "--cd=") and jj + 1 < len(args):
+                        cur = expand(args[jj + 1], env, cur) or cur
+                    elif aa.startswith("--cd="):
+                        cur = expand(a.strip("\"'")[5:], env, cur) or cur
+            skip = {"/c", "/k", "-c", "-lc", "-command", "-c", "-noprofile", "-nologo", "-noninteractive", "-e",
+                    "--exec", "--", "-l", "-i", "-x", "-ex", "-executionpolicy", "bypass", "-bypass"}
+            rest, j = [], 0
+            while j < len(args):
+                a = args[j]
+                if a.lower() in ("-d", "--distribution", "-u", "--user", "--cd", "-executionpolicy") and j + 1 < len(args):
+                    j += 2
+                    continue
+                if a.strip("\"'").lower().startswith("--cd=") and a.strip("\"'").lower() != "--cd=" and not rest:
+                    j += 1
+                    continue
+                if a.strip("\"'").lower() == "--cd=" and j + 1 < len(args):      # the quoted value after '=' is its own token
+                    j += 2
+                    continue
+                if (a.lower() in skip and not rest) or (a.startswith("-") and not rest and base in ("wsl", "bash", "sh", "zsh")):
+                    j += 1
+                    continue
+                rest.append(a)
+                j += 1
+            if rest and not (len(rest) == 1 and rest[0][:1] in "\"'"):
+                inner_cmds.append(" ".join(rest))
+            for ic in inner_cmds:
+                if depth < 8:
+                    hit = check_cmd(ic, env, cur, depth + 1)
                     if hit:
                         return hit
-        if base == "xargs" and depth < 4:
+                elif re.search(r"onedrive|[/\\\\](users|home)\b|/mnt/[a-z]\b|%userprofile%|\$env:userprofile|\$home|~|^\s*[a-z]:[/\\\\]?\s*$", ic, re.I) \
+                        or any(norm(h).lower() in ic.lower().replace("\\\\", "/") for h in home_dirs(env)):
+                    return "nested wrappers deeper than 8 levels"
+        if base == "xargs" and depth < 8:
             # 1.1.20: xargs -a /dev/null find ~ : the command xargs runs is judged as if typed
             rest, j = [], 0
             while j < len(args):
@@ -412,7 +487,7 @@ def looks_like_embedded(base, seg):
 
 def embedded_hit(seg, env, cur):
     """A one-liner in another language that walks a tree: refused when it names a OneDrive or home-level path."""
-    for t in re.findall(r"""[A-Za-z]:[\\/][^\s"']*|~[\\/]?[^\s"']*|%[A-Za-z_]+%[^\s"']*|\$env:\w+[^\s"']*|/[^\s"']+""", seg):
+    for t in re.findall(r"""[A-Za-z]:[\\/][^\s"']*|~[\\/]?[^\s"']*|%[A-Za-z_]+%[^\s"']*|\$env:\w+[^\s"']*|\$\{?[A-Za-z_]\w*\}?[^\s"']*|/[^\s"']+""", seg):
         hit = reaches(expand(t, env, cur), env, t, single_ok=False)
         if hit:
             return hit
