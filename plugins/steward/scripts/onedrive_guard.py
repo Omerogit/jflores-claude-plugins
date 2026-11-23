@@ -40,6 +40,7 @@ COPY_ALWAYS = {"robocopy", "xcopy", "rsync", "zip", "7z", "7za", "tar"}
 # ... and these only when recursive or given a wildcard:
 COPY_FLAGGED = {"cp", "copy", "mv", "move", "scp", "copy-item", "cpi", "move-item"}
 WRAPPERS = {"powershell", "pwsh", "bash", "sh", "zsh", "cmd", "wsl"}
+POSIX_SEARCH = {"rg", "ripgrep", "ag", "ack", "fd", "fdfind", "find", "tree", "du"} | GREPS
 READERS = {"cat", "type", "gc", "get-content", "head", "tail", "wc", "more", "less", "bat"}
 SHELL_CD = {"cd", "chdir", "pushd", "set-location", "sl"}
 WORD = re.compile(r"""("(?:[^"\\]|\\.)*"|'[^']*'|[^\s"';|&<>()]+)""")
@@ -286,10 +287,17 @@ def check_cmd(cmd, env, cwd, depth=0):
                     if hit:
                         return hit
             continue
-        flags = [a for a in args if a.startswith("-") or re.match(r"^/[A-Za-z]$", a)]
+        posix = base in POSIX_SEARCH
+        # 1.1.19: for the POSIX search tools "/" and "/c" are a root and a Git Bash drive, never a /s-style flag
+        flags = [a for a in args if a.startswith("-") or (not posix and re.match(r"^/[A-Za-z]$", a))]
         flagstr = " ".join(flags).lower()
-        paths = [a for a in args if not a.startswith("-") and not re.match(r"^/[A-Za-z]$", a) and looks_like_path(a)]
+        paths = [a for a in args if not a.startswith("-") and (posix and (a == "/" or re.match(r"^/[A-Za-z]$", a))
+                                                          or (not re.match(r"^/[A-Za-z]$", a) and looks_like_path(a)))]
         recursive = False
+        walks = base in SEARCHERS or base in COPY_ALWAYS    # 1.1.19: the tool itself descends into a folder it is given
+        if base in GREPS or base in COPY_FLAGGED or base in LISTERS or base == "findstr":
+            walks = bool(re.search(r"(^| )-[a-zA-Z]*[rRa]|--recursive|-recurse|-d recurse|(^| )/s\b", flagstr + " ", re.I)) \
+                and not (base in LISTERS and not re.search(r"-r|/s", flagstr + " ", re.I))
         if base in SEARCHERS:
             recursive = True
             if base == "findstr":
@@ -324,6 +332,11 @@ def check_cmd(cmd, env, cwd, depth=0):
             hit = reaches(expand(p, env, cur), env, p)
             if hit:
                 return hit
+            if walks and is_wild(p):
+                # 1.1.19: du -sh ~/* , rg x C:\Users\omar\* : a walking tool follows the wildcard into OneDrive*
+                ex = expand(p, env, cur)
+                if ex and is_wild(ex.split("/")[-1]) and above_onedrive("/".join(ex.split("/")[:-1]) or "/", env):
+                    return ex
     return mentions
 
 

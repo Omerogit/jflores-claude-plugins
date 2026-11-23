@@ -123,6 +123,18 @@ def fixtures(root, home, od, cloud, proj):
         ("Select-String over a wildcard folder under home", ps("Select-String -Path '%s/*/*.txt' -Pattern budget" % home), proj, True),
         ("grep over a wildcard folder under home", bash("grep foo %s/*/*.txt" % home), proj, True),
         ("WSL /mnt/c/Users/omar recursive search", bash("grep -r budget /mnt/c/Users/omar"), proj, True),
+        # --- 1.1.19: Shallum's remaining gaps (Git Bash drive and filesystem roots; a wildcard one level under home)
+        ("find over the Git Bash drive /c", bash("find /c -name x"), proj, True),
+        ("rg over /c, no trailing slash", bash("rg foo /c"), proj, True),
+        ("find over the filesystem root", bash("find / -name x"), proj, True),
+        ("grep -r over the filesystem root", bash("grep -r foo /"), proj, True),
+        ("du over a wildcard one level under home", bash("du -sh %s/*" % home), proj, True),
+        ("rg over a wildcard one level under home", bash("rg budget %s/*" % home), proj, True),
+        ("grep -r over a wildcard one level under home", bash("grep -r budget %s/*" % home), proj, True),
+        ("cp -r of a wildcard one level under home", bash("cp -r %s/* /tmp/x" % home), proj, True),
+        ("CONTROL ls of a wildcard one level under home (names only)", bash("ls %s/*" % home), proj, False),
+        ("CONTROL grep (no -r) of a wildcard one level under home", bash("grep budget %s/*" % home), proj, False),
+        ("CONTROL du of a project wildcard", bash("du -sh %s/*" % proj), proj, False),
         # --- controls: these must still pass
         ("CONTROL grep with a wildcard in a project folder", bash("grep foo '%s'/*.py" % proj), proj, False),
         ("CONTROL powershell -Command wrapping a project listing", bash('powershell -Command "Get-ChildItem -Recurse \'%s\'"' % proj), proj, False),
@@ -232,6 +244,8 @@ def main():
                 "1.1.16 xargs rule dropped": src.replace('if base == "xargs" and k > 0:', "if False:"),
                 "1.1.16 wildcard-folder rule dropped": src.replace("or wild_descends(p, env):", ":"),
                 "1.1.16 WSL path rule dropped": src.replace('if re.match(r"^/(mnt/)?[a-z](/users(/[^/]+)?)?$", p):', "if False:"),
+                "1.1.19 slash-root rule dropped (find / and find /c pass)": src.replace("posix = base in POSIX_SEARCH", "posix = False"),
+                "1.1.19 walking-wildcard rule dropped (du ~/* passes)": src.replace("if walks and is_wild(p):", "if False:"),
             }
             for label, text in muts.items():
                 assert text != src or label.startswith("hook removed"), label
