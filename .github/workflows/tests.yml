@@ -1,0 +1,22 @@
+name: tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Offline set only. Left out on purpose: test_plugin.py (needs a live claim link),
+      # test_steward_plugin.py (needs STEWARD_TEST_* variables), test_setup_windows.py (Windows LOCALAPPDATA).
+      - name: run offline tests
+        run: |
+          set -e
+          for t in tests/test_*.py; do
+            case "$t" in tests/test_plugin.py|tests/test_steward_plugin.py|tests/test_setup_windows.py) continue;; esac
+            echo "== $t"; python3 -I "$t"
+          done
