@@ -56,6 +56,9 @@ FLUSH_TIMEOUT = 45
 TAG_RE = re.compile(r"^\(On the laptop, [^)]*?session ([0-9a-f]{8})\) ?")
 NOT_HIS = re.compile(r"^\s*<")              # a tool-generated prompt (e.g. a slash command's own echo), not a person's
 
+PLUGIN_VERSION = "1.1.23"    # = .claude-plugin/plugin.json (a test holds them together): the door's poll record reads it
+UA = "steward-plugin/" + PLUGIN_VERSION   # sent on every door call, so the server can tell which copy is polling (1.1.22 sent urllib's default)
+
 HTTP = None                  # fn(method, url, token, body, timeout) -> (status, dict); a test hands in its own
 
 
@@ -169,6 +172,7 @@ def _http(method, url, token, body=None, timeout=HTTP_TIMEOUT):
     req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8") if body is not None else None,
                                  method=method)
     req.add_header("authorization", "Bearer " + token)
+    req.add_header("User-Agent", UA)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, json.loads(r.read().decode("utf-8") or "{}")
